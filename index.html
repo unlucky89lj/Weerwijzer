@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Weerwijzer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0f4c81">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Weerwijzer">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: rustig, praktisch, zoals een goede weerkaart op tv.
+   IDEA: een weerstation-paneel: meters bovenaan, daaronder het overzicht per weertype.
+   PICTURE: grote gevoelstemperatuur-meter + gladheidslamp die live meebewegen met de invoer.
+   COLOUR and TYPE: diep hemelsblauw veld, wolkenwit, zonnig oranje als accent; Archivo.
+   LAYOUT: rekenpaneel bovenaan (invoer + groot resultaat), daaronder kaarten per gevaar. */
+:root{color-scheme:light dark;
+--bg:light-dark(#eef4fa,#0b1622);--sky:light-dark(#0f4c81,#0d2a47);--sky2:light-dark(#1d6fb0,#14406b);
+--ink:light-dark(#0e1a26,#e7eef6);--mut:light-dark(#4a5a6b,#9fb1c4);--card:light-dark(#ffffff,#122233);
+--line:light-dark(#d6e1ec,#22364b);--sun:#f59e0b;--ok:#2f9e6b;--warn:#f59e0b;--bad:#dc3545}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 Archivo,system-ui,sans-serif;overflow-x:clip}
+.band{padding:clamp(28px,4vw,64px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+header.band{padding-top:max(clamp(28px,4vw,64px),env(safe-area-inset-top));background:linear-gradient(160deg,var(--sky),var(--sky2));color:#fff;padding-bottom:clamp(32px,5vw,72px)}
+h1{font-size:clamp(32px,5vw,48px);line-height:1.05;margin:0 0 6px;font-weight:800;text-wrap:balance}
+.lead{margin:0 0 24px;color:#d6e6f5;max-width:62ch}
+.panel{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:20px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:clamp(16px,2.5vw,28px)}
+.inputs{display:grid;gap:14px;align-content:start}
+label{display:grid;gap:4px;font-size:14px;color:#d6e6f5}
+.row{display:flex;gap:10px;align-items:center}
+input[type=range]{flex:1;accent-color:var(--sun);height:44px}
+output{font-weight:600;color:#fff;min-width:5.5em;text-align:right;white-space:nowrap}
+select{font:inherit;font-size:16px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.2);color:#fff;padding:0 10px}
+select option{color:#000}
+input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.result{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.meter{background:rgba(0,0,0,.18);border-radius:16px;padding:16px;display:grid;gap:6px;align-content:start}
+.meter small{color:#bcd3ea;font-size:13px}
+.big{font-size:clamp(44px,7vw,72px);font-weight:800;line-height:1;white-space:nowrap}
+.fig{position:relative;height:120px}.fig>svg{position:absolute;inset:0;width:100%;height:100%}
+.lamp{display:flex;gap:12px;align-items:center}
+.dot{width:44px;height:44px;border-radius:50%;flex:none;box-shadow:0 0 24px currentColor;background:currentColor;transition:color .4s}
+.status{font-size:24px;font-weight:800;line-height:1.1}
+.note{font-size:14px;color:#d6e6f5;margin:0}
+.wide{grid-column:1/-1}
+.bf{display:flex;gap:3px;margin-top:4px}.bf i{flex:1;height:10px;border-radius:3px;background:rgba(255,255,255,.18)}.bf i.on{background:var(--sun)}
+h2{font-size:28px;line-height:1.1;margin:0 0 6px}
+.sub{color:var(--mut);margin:0 0 20px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px 18px;display:grid;gap:8px;align-content:start}
+.card h3{margin:0;font-size:19px;display:flex;gap:10px;align-items:center}
+.card svg{width:28px;height:28px;flex:none;color:var(--sky2)}
+.card p{margin:0;color:var(--mut);font-size:15px}
+.links{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.links a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px;border-radius:999px;background:light-dark(#e3eef9,#183049);color:var(--ink);text-decoration:none;font-weight:600;font-size:15px}
+.links a.main{background:var(--sky2);color:#fff}
+.tip{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-top:20px}
+.tip p{margin:0}
+footer{color:var(--mut);font-size:13px;text-align:center;padding:24px 16px 40px}
+.live{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-bottom:28px}
+.hours{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.loc{display:flex;flex-wrap:wrap;gap:8px}
+.loc input{flex:1 1 200px;font:inherit;font-size:16px;height:44px;border-radius:10px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.2);color:#fff;padding:0 12px}
+.loc input::placeholder{color:#bcd3ea}
+.btn{font:inherit;font-weight:600;font-size:15px;min-height:44px;padding:0 16px;border-radius:999px;border:0;background:#fff;color:var(--sky);cursor:pointer}
+.btn.alt{background:rgba(255,255,255,.15);color:#fff}
+.btn:focus-visible,.loc input:focus-visible{outline:3px solid var(--sun);outline-offset:2px}
+.sugg{list-style:none;margin:0;padding:0;display:grid;gap:4px}.sugg:empty{display:none}
+.sugg button{width:100%;text-align:left;font:inherit;min-height:44px;padding:0 12px;border-radius:10px;border:0;background:rgba(255,255,255,.12);color:#fff;cursor:pointer}
+.now{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:16px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:20px;padding:clamp(16px,2.5vw,28px)}
+.now small{color:#bcd3ea}
+.facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;align-content:start}
+.fact{background:rgba(0,0,0,.18);border-radius:12px;padding:10px 12px}
+.fact b{display:block;font-size:20px;white-space:nowrap}.fact span{font-size:13px;color:#bcd3ea}
+.alerts{display:grid;gap:8px}.alerts:empty{display:none}
+.al{display:flex;gap:10px;align-items:center;background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.5);border-radius:12px;padding:10px 14px;font-weight:600}
+.al.red{background:rgba(220,53,69,.22);border-color:rgba(220,53,69,.6)}
+.al a{color:#fff}
+.rain{display:flex;align-items:flex-end;gap:4px;height:70px;margin-top:6px}
+.rain div{flex:1;background:#7cc4ff;border-radius:4px 4px 0 0;min-height:2px;position:relative}
+.rainlbl{display:flex;justify-content:space-between;font-size:12px;color:#bcd3ea}
+.hours{display:flex;gap:8px;padding-bottom:6px}
+.hr{flex:none;width:76px;background:rgba(0,0,0,.18);border-radius:12px;padding:8px;text-align:center;font-size:13px;color:#bcd3ea}
+.hr b{display:block;font-size:19px;color:#fff}
+.days{display:grid;gap:6px}
+.day{display:grid;grid-template-columns:5.5em minmax(0,1fr) auto auto;gap:10px;align-items:center;background:rgba(0,0,0,.14);border-radius:12px;padding:10px 14px}
+.day .d{font-weight:600}.day .x{font-size:14px;color:#bcd3ea}.day .tt{white-space:nowrap;font-weight:600}.day .r{font-size:13px;color:#bcd3ea;white-space:nowrap;text-align:right}
+.auto{display:flex;gap:10px;align-items:center;font-size:14px;color:#d6e6f5}.auto input{width:22px;height:22px;accent-color:var(--sun)}
+h2.calc{color:#fff;font-size:24px;margin:8px 0 12px}
+@media(max-width:820px){.panel,.now{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:480px){.day{grid-template-columns:4.5em minmax(0,1fr) auto}.day .r{grid-column:2/-1;text-align:left}}
+@media(max-width:480px){.result{grid-template-columns:minmax(0,1fr)}}
+@media(prefers-reduced-motion:reduce){.dot{transition:none}}
+</style>
+</head>
+<body>
+<header class="band"><div class="wrap">
+  <h1>Weerwijzer</h1>
+  <p class="lead">Live weer voor jouw plek: regen, wind, sneeuw, gladheid en hoe koud of warm het voelt. Onderaan staat per weertype de beste bron voor orkanen, bosbranden, tsunami's en meer.</p>
+  <section class="live" aria-label="Live weer">
+    <form class="loc" id="locf">
+      <button type="button" class="btn" id="gps">Mijn locatie</button>
+      <input id="q" type="search" placeholder="Zoek een plaats" autocomplete="off" aria-label="Plaats zoeken">
+      <button class="btn alt" type="submit">Zoek</button>
+    </form>
+    <ul class="sugg" id="sugg"></ul>
+    <p class="note" id="lstat">Kies je locatie om het live weer te zien.</p>
+    <div class="now" id="now" hidden>
+      <div>
+        <small id="place"></small>
+        <div class="big" id="nt"></div>
+        <div class="status" id="nd"></div>
+        <p class="note" id="nf"></p>
+        <p class="note" style="margin-top:10px"><button type="button" class="btn alt" id="refresh">Vernieuwen</button></p>
+      </div>
+      <div class="facts" id="facts"></div>
+    </div>
+    <div class="alerts" id="alerts"></div>
+    <div class="meter" id="rainbox" hidden><small>Neerslag komende 2 uur</small><div class="rain" id="rain"></div><div class="rainlbl"><span>nu</span><span>+1 uur</span><span>+2 uur</span></div><p class="note" id="rainx"></p></div>
+    <div class="hours scroll" id="hours"></div>
+    <div class="days" id="days"></div>
+    <label class="auto"><input type="checkbox" id="auto" checked> Rekenpaneel automatisch invullen met het live weer</label>
+  </section>
+  <h2 class="calc">Zelf rekenen</h2>
+  <div class="panel">
+    <div class="inputs">
+      <label for="t">Temperatuur<div class="row"><input id="t" type="range" min="-20" max="40" step="0.5" value="2"><output id="to"></output></div></label>
+      <label for="w">Windsnelheid<div class="row"><input id="w" type="range" min="0" max="120" step="1" value="25"><output id="wo"></output></div></label>
+      <label for="h">Luchtvochtigheid<div class="row"><input id="h" type="range" min="10" max="100" step="1" value="92"><output id="ho"></output></div></label>
+      <label for="p">Neerslag<select id="p">
+        <option value="geen">Geen</option><option value="nat">Natte weg na regen</option>
+        <option value="regen">Regen of motregen</option><option value="sneeuw">Sneeuw</option>
+      </select></label>
+      <label for="n">Moment<select id="n"><option value="dag">Overdag of bewolkt</option><option value="nacht">Heldere nacht of vroege ochtend</option></select></label>
+    </div>
+    <div class="result">
+      <div class="meter">
+        <small>Gevoelstemperatuur</small>
+        <div class="big" id="fl">–</div>
+        <p class="note" id="flx"></p>
+        <div class="fig"><svg id="g" aria-label="Temperatuur en gevoelstemperatuur op een schaal"></svg></div>
+      </div>
+      <div class="meter">
+        <small>Kans op gladheid</small>
+        <div class="lamp"><span class="dot" id="dot"></span><span class="status" id="gs">–</span></div>
+        <p class="note" id="gx"></p>
+        <small id="dp"></small>
+      </div>
+      <div class="meter wide">
+        <small>Wind: <b id="bft" style="color:#fff"></b></small>
+        <div class="bf" id="bfbar"></div>
+        <p class="note" id="bx"></p>
+      </div>
+    </div>
+  </div>
+</div></header>
+
+<main class="band"><div class="wrap">
+  <h2>Per weertype de beste bron</h2>
+  <p class="sub">Geen enkele app is overal de beste in. Deze links openen live kaarten en officiële waarschuwingen.</p>
+  <div class="grid" id="cards"></div>
+  <div class="tip"><p><b>Snelle combinatie voor je telefoon:</b> Weeronline of Buienradar voor elke dag, de KNMI-app met meldingen aan voor code geel/oranje/rood en gladheid. Op reis neem je Windy erbij. NL-Alert krijg je in Nederland automatisch, zonder app.</p></div>
+</div></main>
+<footer>De berekeningen zijn indicatief (KNMI/JAG-formule voor windgevoel, hitte-index voor warm weer). Volg bij twijfel altijd de officiële waarschuwingen van het KNMI.</footer>
+
+<script>
+{
+const $=id=>document.getElementById(id);
+const ic={
+ rain:'<path d="M7 15a5 5 0 1 1 1-9.9A6 6 0 0 1 19 9a4 4 0 0 1-1 7.9H7z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 19l-1 3M13 19l-1 3M17 19l-1 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+ wind:'<path d="M3 9h11a3 3 0 1 0-3-3M3 15h15a3 3 0 1 1-3 3M3 12h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+ snow:'<path d="M12 2v20M3.3 7l17.4 10M3.3 17L20.7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+ ice:'<path d="M4 18h16M6 18l2-6 2 6M14 18l2-8 2 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M3 21h18" stroke="currentColor" stroke-width="2"/>',
+ temp:'<path d="M10 14V4a2 2 0 1 1 4 0v10a4 4 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="17" r="2" fill="currentColor"/>',
+ storm:'<path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0M12 3c5 0 8 4 8 9M12 21c-5 0-8-4-8-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+ fire:'<path d="M12 22c4 0 7-3 7-7 0-4-3-6-4-10-2 2-3 4-3 6-1-1-2-2-2-4-3 3-5 5-5 8 0 4 3 7 7 7z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+ wave:'<path d="M2 16c3 0 3-2 6-2s3 2 6 2 3-2 6-2M2 20c3 0 3-2 6-2s3 2 6 2 3-2 6-2M4 12c0-5 4-8 9-8-3 2-4 5-2 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+ bolt:'<path d="M13 2L5 14h6l-1 8 8-12h-6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>',
+ quake:'<path d="M2 12h4l2-6 3 12 3-9 2 3h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+ air:'<circle cx="7" cy="8" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="16" cy="7" r="3" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="11" cy="16" r="3" fill="none" stroke="currentColor" stroke-width="2"/>',
+ alert:'<path d="M12 3l10 18H2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 10v5M12 18v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'
+};
+const cards=[
+ ['rain','Regen','Minuut-voor-minuut buienradar voor de komende 2 uur.',[['Buienradar','https://www.buienradar.nl',1],['Weeronline','https://www.weeronline.nl']]],
+ ['temp','Temperatuur en gevoel','Uurverwachting met gevoelstemperatuur; Weeronline scoort het best op temperatuur.',[['Weeronline','https://www.weeronline.nl',1],['KNMI','https://www.knmi.nl/nederland-nu/weer/verwachtingen']]],
+ ['wind','Wind en storm','Windkaarten met windstoten, ook boven zee.',[['Windy','https://www.windy.com',1],['KNMI waarschuwingen','https://www.knmi.nl/nederland-nu/weer/waarschuwingen']]],
+ ['snow','Sneeuw','Sneeuwbuien op de radar en verwachte sneeuwhoogte.',[['Buienradar','https://www.buienradar.nl',1],['Windy','https://www.windy.com']]],
+ ['ice','Gladheid','Officiële code geel/oranje/rood voor gladheid en ijzel per provincie.',[['KNMI waarschuwingen','https://www.knmi.nl/nederland-nu/weer/waarschuwingen',1],['KNMI-app','https://www.knmi.nl/app']]],
+ ['bolt','Onweer','Live blikseminslagen; de KNMI-app waarschuwt 15 minuten vooraf (bèta).',[['Blitzortung','https://www.blitzortung.org',1],['KNMI-app','https://www.knmi.nl/app']]],
+ ['storm','Orkanen','Orkaansporen en verwachte routes wereldwijd.',[['NHC (VS)','https://www.nhc.noaa.gov',1],['Zoom Earth','https://zoom.earth'],['Windy','https://www.windy.com']]],
+ ['fire','Bosbranden','Actieve branden en brandgevaar, Europa en wereldwijd.',[['EFFIS (EU)','https://effis.jrc.ec.europa.eu',1],['NASA FIRMS','https://firms.modaps.eosdis.nasa.gov/map/']]],
+ ['wave','Tsunami','Tsunami- en rampwaarschuwingen wereldwijd.',[['GDACS','https://www.gdacs.org',1],['Tsunami.gov','https://www.tsunami.gov']]],
+ ['quake','Aardbevingen','Bevingen in Nederland via de KNMI-app, wereldwijd via GDACS.',[['KNMI-app','https://www.knmi.nl/app',1],['GDACS','https://www.gdacs.org']]],
+ ['air','Luchtkwaliteit','Actuele metingen van fijnstof, ozon en stikstof.',[['Luchtmeetnet','https://www.luchtmeetnet.nl',1]]],
+ ['alert','Noodsituaties','NL-Alert stuurt bij echte rampen een bericht naar elke telefoon in het gebied.',[['NL-Alert','https://www.nl-alert.nl',1]]]
+];
+$('cards').innerHTML=cards.map(([i,t,d,l])=>`<article class="card"><h3><svg viewBox="0 0 24 24" aria-hidden="true">${ic[i]}</svg>${t}</h3><p>${d}</p><div class="links">${l.map(([n,u,m])=>`<a class="${m?'main':''}" href="${u}" target="_blank" rel="noopener">${n}</a>`).join('')}</div></article>`).join('');
+
+const bft=[[1,'windstil'],[6,'zwak'],[12,'zwak'],[20,'matig'],[29,'matig'],[39,'vrij krachtig'],[50,'krachtig'],[62,'hard'],[75,'stormachtig'],[89,'storm'],[103,'zware storm'],[118,'zeer zware storm'],[1e9,'orkaan']];
+const bftOf=v=>{for(let i=0;i<bft.length;i++)if(v<bft[i][0])return i;return 12};
+const bftTip=b=>b<=3?'Prima om te fietsen.':b<=5?'Je merkt het op de fiets, vooral tegenwind.':b<=6?'Paraplu wordt lastig, fietsen is zwaar.':b<=7?'Code geel mogelijk. Takken kunnen breken.':b<=9?'Gevaarlijk buiten. Kijk naar KNMI-waarschuwingen.':'Blijf binnen. Grote kans op schade.';
+$('bfbar').innerHTML=Array.from({length:12},()=>'<i></i>').join('');
+
+const dew=(T,H)=>{const a=17.62,b=243.12,g=Math.log(H/100)+a*T/(b+T);return b*g/(a-g)};
+function feels(T,v,H){
+  if(T<=10&&v>=4.8){const p=v**0.16;return [13.12+0.6215*T-11.37*p+0.3965*T*p,'Windgevoel: de wind maakt het kouder dan de thermometer zegt.']}
+  if(T>=27&&H>=40){const F=T*9/5+32;const HI=-42.379+2.04901523*F+10.14333127*H-0.22475541*F*H-0.00683783*F*F-0.05481717*H*H+0.00122874*F*F*H+0.00085282*F*H*H-0.00000199*F*F*H*H;return [(HI-32)*5/9,'Hitte-index: vocht maakt het warmer dan het is. Drink genoeg.']}
+  return [T,'Gevoel is ongeveer gelijk aan de echte temperatuur.']
+}
+function glad(T,H,p,n){
+  const d=dew(T,H),near=T-d<=1.5;
+  if(p==='sneeuw'&&T<=2)return [3,'Hoog','Sneeuw blijft liggen en wordt aangereden tot ijs.'];
+  if(p==='regen'&&T<=0)return [3,'Hoog','Regen op een bevroren weg geeft ijzel. Kijk of er code oranje of rood is.'];
+  if(p==='nat'&&T<=1)return [3,'Hoog','Natte wegen vriezen op. Vooral fietspaden en bruggen.'];
+  if(T<=0&&near)return [2,'Middel','Rijp of opvriezing op de weg is waarschijnlijk.'];
+  if(T<=3&&(n==='nacht'||near)&&(p!=='geen'||near||n==='nacht'))return [T<=1.5?2:1,T<=1.5?'Middel':'Laag','Het wegdek kan kouder zijn dan de lucht. Let op bruggen en schaduw.'];
+  if(T<=3)return [1,'Laag','Rond het vriespunt: plaatselijk glad mogelijk.'];
+  return [0,'Geen','Te warm voor gladheid.']
+}
+const col=['var(--ok)','#8bc34a','var(--warn)','var(--bad)'];
+function gauge(T,F){
+  const s=$('g'),W=s.clientWidth,H=s.clientHeight;if(!W)return;
+  const lo=-30,hi=45,x=v=>16+(Math.max(lo,Math.min(hi,v))-lo)/(hi-lo)*(W-32),y=H/2;
+  const stops=[[-30,'#5b8def'],[0,'#9fd3ff'],[15,'#7bd389'],[28,'#f5c542'],[45,'#e5533d']];
+  const grad=stops.map(([v,c])=>`<stop offset="${(v-lo)/(hi-lo)*100}%" stop-color="${c}"/>`).join('');
+  const ticks=(W>260?[-20,-10,0,10,20,30,40]:[-20,0,20,40]).map(v=>`<text x="${x(v)}" y="${y+34}" fill="#bcd3ea" font-size="12" text-anchor="middle">${v}°</text>`).join('');
+  s.innerHTML=`<defs><linearGradient id="lg">${grad}</linearGradient></defs>
+  <rect x="16" y="${y-7}" width="${W-32}" height="14" rx="7" fill="url(#lg)"/>
+  <line x1="${x(T)}" x2="${x(F)}" y1="${y}" y2="${y}" stroke="#fff" stroke-width="3" stroke-dasharray="4 4"/>
+  <circle cx="${x(T)}" cy="${y}" r="9" fill="none" stroke="#fff" stroke-width="3"/>
+  <circle cx="${x(F)}" cy="${y}" r="10" fill="#fff"/>
+  <text x="${Math.min(W-40,Math.max(40,x(F)))}" y="${y-18}" fill="#fff" font-size="13" font-weight="600" text-anchor="middle">gevoel</text>${ticks}`;
+}
+function save(){try{localStorage.setItem('ww',JSON.stringify(['t','w','h','p','n'].map(k=>$(k).value)))}catch(e){}}
+function load(){try{const v=JSON.parse(localStorage.getItem('ww'));if(v)['t','w','h','p','n'].forEach((k,i)=>$(k).value=v[i])}catch(e){}}
+let T,F;
+function upd(){
+  T=+$('t').value;const v=+$('w').value,H=+$('h').value,p=$('p').value,n=$('n').value;
+  $('to').textContent=T.toFixed(1).replace('.',',')+' °C';$('wo').textContent=v+' km/u';$('ho').textContent=H+' %';
+  const f=feels(T,v,H);F=f[0];
+  $('fl').textContent=Math.round(F)+'°';
+  $('flx').textContent=f[1]+(Math.round(F)!==Math.round(T)?` (${Math.round(F-T)>0?'+':''}${Math.round(F-T)}° t.o.v. de thermometer)`:'');
+  const g=glad(T,H,p,n);$('dot').style.color=col[g[0]];$('gs').textContent=g[1];$('gx').textContent=g[2];
+  $('dp').textContent='Dauwpunt: '+dew(T,H).toFixed(1).replace('.',',')+' °C';
+  const b=bftOf(v);$('bft').textContent=`Beaufort ${b}, ${bft[b][1]}`;$('bx').textContent=bftTip(b);
+  [...$('bfbar').children].forEach((el,i)=>el.classList.toggle('on',i<b));
+  gauge(T,F);save();
+}
+load();
+['t','w','h','p','n'].forEach(k=>$(k).addEventListener('input',upd));
+new ResizeObserver(()=>gauge(T,F)).observe($('g'));
+upd();
+
+/* ---------- Live weer (Open-Meteo, gratis, geen sleutel) ---------- */
+const WC={0:'Onbewolkt',1:'Overwegend helder',2:'Half bewolkt',3:'Bewolkt',45:'Mist',48:'Mist met rijp',51:'Lichte motregen',53:'Motregen',55:'Dichte motregen',56:'IJzelende motregen',57:'IJzelende motregen',61:'Lichte regen',63:'Regen',65:'Zware regen',66:'IJzel',67:'Zware ijzel',71:'Lichte sneeuw',73:'Sneeuw',75:'Zware sneeuw',77:'Korrelsneeuw',80:'Lichte buien',81:'Buien',82:'Zware buien',85:'Sneeuwbuien',86:'Zware sneeuwbuien',95:'Onweer',96:'Onweer met hagel',99:'Zwaar onweer met hagel'};
+const DIR=['N','NO','O','ZO','Z','ZW','W','NW'];
+const nl=v=>String(v).replace('.',',');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const get=k=>{try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}};
+const put=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let loc=get('wwloc'),last=0;
+
+function precipType(c){
+  if((c.snowfall||0)>0||[71,73,75,77,85,86].includes(c.weather_code))return 'sneeuw';
+  if([56,57,66,67].includes(c.weather_code))return 'ijzel';
+  if((c.precipitation||0)>0||(c.weather_code>=51&&c.weather_code<=82))return 'regen';
+  return 'geen';
+}
+async function fetchWeather(){
+  if(!loc)return;
+  $('lstat').textContent='Weer ophalen voor '+loc.name+'…';
+  const u='https://api.open-meteo.com/v1/forecast?latitude='+loc.lat+'&longitude='+loc.lon+
+   '&current=temperature_2m,apparent_temperature,relative_humidity_2m,dew_point_2m,precipitation,snowfall,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day'+
+   '&minutely_15=precipitation&forecast_minutely_15=8'+
+   '&hourly=temperature_2m,apparent_temperature,precipitation_probability,precipitation,snowfall,wind_gusts_10m,weather_code&forecast_hours=24'+
+   '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,snowfall_sum,wind_gusts_10m_max&forecast_days=7&timezone=auto';
+  try{
+    const r=await fetch(u);if(!r.ok)throw new Error(r.status);
+    const d=await r.json();d._at=Date.now();d._loc=loc;put('wwdata',d);render(d);last=Date.now();
+  }catch(e){
+    const d=get('wwdata');
+    if(d&&d._loc&&d._loc.name===loc.name){render(d);$('lstat').textContent='Geen verbinding. Je ziet het weer van '+new Date(d._at).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})+'.'}
+    else $('lstat').textContent='Het weer kon niet worden opgehaald. Controleer je internet en probeer opnieuw.';
+  }
+}
+function render(d){
+  const c=d.current,h=d.hourly,dl=d.daily;
+  $('now').hidden=false;
+  $('place').textContent=d._loc.name;
+  $('nt').textContent=Math.round(c.temperature_2m)+'°';
+  $('nd').textContent=WC[c.weather_code]||'';
+  $('nf').textContent='Voelt als '+Math.round(c.apparent_temperature)+'°. Vandaag '+Math.round(dl.temperature_2m_min[0])+'° tot '+Math.round(dl.temperature_2m_max[0])+'°.';
+  const pt=precipType(c),night=!c.is_day;
+  const g=glad(c.temperature_2m,c.relative_humidity_2m,pt==='ijzel'?'regen':pt,night?'nacht':'dag');
+  if(pt==='ijzel'){g[0]=3;g[1]='Hoog';}
+  const b=bftOf(c.wind_speed_10m);
+  $('facts').innerHTML=[
+   [Math.round(c.wind_speed_10m)+' km/u','Wind '+DIR[Math.round(c.wind_direction_10m/45)%8]+', Bft '+b],
+   [Math.round(c.wind_gusts_10m)+' km/u','Windstoten'],
+   [nl(c.precipitation)+' mm','Neerslag nu'],
+   [c.relative_humidity_2m+' %','Luchtvochtigheid'],
+   [nl(Math.round(c.dew_point_2m*10)/10)+'°','Dauwpunt'],
+   [`<span class="dot" style="display:inline-block;width:14px;height:14px;vertical-align:middle;margin-right:6px;color:${col[g[0]]}"></span>${g[1]}`,'Kans op gladheid']
+  ].map(([v,l])=>`<div class="fact"><b>${v}</b><span>${l}</span></div>`).join('');
+
+  // Signalen (geen officiële waarschuwingen)
+  const al=[],gmax=Math.max(...h.wind_gusts_10m),snow=h.snowfall.reduce((a,v)=>a+v,0);
+  if(gmax>=75)al.push(['red','Zware windstoten tot '+Math.round(gmax)+' km/u in de komende 24 uur']);
+  else if(gmax>=60)al.push(['','Harde windstoten tot '+Math.round(gmax)+' km/u in de komende 24 uur']);
+  if(h.weather_code.some(x=>x>=95))al.push(['','Kans op onweer in de komende 24 uur']);
+  if(snow>0)al.push(['','Sneeuw verwacht: ongeveer '+nl(Math.round(snow*10)/10)+' cm in de komende 24 uur']);
+  if(g[0]>=2)al.push([g[0]===3?'red':'','Kans op gladheid: '+g[2]]);
+  if(Math.min(...h.temperature_2m)<=0&&g[0]<2&&h.precipitation.some(v=>v>0))al.push(['','Vorst en neerslag in de komende 24 uur: kans op gladheid later']);
+  if(dl.temperature_2m_max[0]>=30)al.push(['','Heet vandaag: tot '+Math.round(dl.temperature_2m_max[0])+'°']);
+  if(Math.min(...h.apparent_temperature)<=-10)al.push(['','Strenge kou: het voelt als '+Math.round(Math.min(...h.apparent_temperature))+'°']);
+  $('alerts').innerHTML=al.map(([k,t])=>`<div class="al ${k}">${esc(t)}</div>`).join('')+(al.length?'<p class="note">Dit zijn signalen uit de verwachting, geen officiële waarschuwingen. Officieel: <a style="color:#fff" href="https://www.knmi.nl/nederland-nu/weer/waarschuwingen" target="_blank" rel="noopener">KNMI-waarschuwingen</a>.</p>':'');
+
+  // Neerslag komende 2 uur
+  const m=d.minutely_15&&d.minutely_15.precipitation;
+  if(m&&m.length){
+    $('rainbox').hidden=false;const mx=Math.max(1,...m);
+    $('rain').innerHTML=m.map(v=>`<div style="height:${Math.max(3,v/mx*100)}%" title="${nl(v)} mm"></div>`).join('');
+    const tot=m.reduce((a,v)=>a+v,0);
+    $('rainx').textContent=tot===0?'Droog de komende 2 uur.':'Ongeveer '+nl(Math.round(tot*10)/10)+' mm de komende 2 uur.';
+  }
+  // Per uur
+  $('hours').innerHTML=h.time.map((t,i)=>`<div class="hr">${t.slice(11,16)}<b>${Math.round(h.temperature_2m[i])}°</b>voelt ${Math.round(h.apparent_temperature[i])}°<br>${h.precipitation_probability[i]??0}% regen<br>stoot ${Math.round(h.wind_gusts_10m[i])}</div>`).join('');
+  // 7 dagen
+  $('days').innerHTML=dl.time.map((t,i)=>{
+    const dn=i===0?'Vandaag':new Date(t+'T12:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric'});
+    const extra=[dl.precipitation_sum[i]>0?nl(Math.round(dl.precipitation_sum[i]*10)/10)+' mm':'droog',dl.snowfall_sum[i]>0?nl(dl.snowfall_sum[i])+' cm sneeuw':'','stoten '+Math.round(dl.wind_gusts_10m_max[i])].filter(Boolean).join(' · ');
+    return `<div class="day"><span class="d">${dn}</span><span class="x">${WC[dl.weather_code[i]]||''}</span><span class="tt">${Math.round(dl.temperature_2m_min[i])}° / ${Math.round(dl.temperature_2m_max[i])}°</span><span class="r">${extra}</span></div>`}).join('');
+
+  $('lstat').textContent='Bijgewerkt om '+new Date(d._at).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})+'. Bron: Open-Meteo.';
+  // Rekenpaneel invullen
+  if($('auto').checked){
+    $('t').value=Math.round(c.temperature_2m*2)/2;$('w').value=Math.round(c.wind_speed_10m);$('h').value=c.relative_humidity_2m;
+    $('p').value=pt==='geen'?'geen':pt==='sneeuw'?'sneeuw':'regen';$('n').value=night?'nacht':'dag';upd();
+  }
+}
+function setLoc(l){loc=l;put('wwloc',l);$('sugg').innerHTML='';$('q').value='';fetchWeather()}
+$('gps').addEventListener('click',()=>{
+  if(!navigator.geolocation){$('lstat').textContent='Locatie wordt niet ondersteund. Zoek een plaats.';return}
+  $('lstat').textContent='Locatie bepalen…';
+  navigator.geolocation.getCurrentPosition(p=>setLoc({name:'Mijn locatie',lat:+p.coords.latitude.toFixed(3),lon:+p.coords.longitude.toFixed(3)}),
+   ()=>{$('lstat').textContent='Geen toegang tot je locatie. Zoek een plaats of sta locatie toe in je instellingen.'},{timeout:10000,maximumAge:600000});
+});
+$('locf').addEventListener('submit',async e=>{
+  e.preventDefault();const q=$('q').value.trim();if(q.length<2)return;
+  $('lstat').textContent='Zoeken…';
+  try{
+    const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&language=nl&name='+encodeURIComponent(q));
+    const d=await r.json(),res=d.results||[];
+    if(!res.length){$('lstat').textContent='Geen plaats gevonden voor "'+q+'".';$('sugg').innerHTML='';return}
+    $('lstat').textContent='Kies een plaats:';
+    $('sugg').innerHTML=res.map((p,i)=>`<li><button type="button" data-i="${i}">${esc(p.name)}${p.admin1?', '+esc(p.admin1):''}${p.country?' ('+esc(p.country)+')':''}</button></li>`).join('');
+    $('sugg').querySelectorAll('button').forEach(b=>b.addEventListener('click',()=>{const p=res[+b.dataset.i];setLoc({name:p.name,lat:p.latitude,lon:p.longitude})}));
+  }catch(err){$('lstat').textContent='Zoeken lukt niet zonder internet.'}
+});
+$('refresh').addEventListener('click',fetchWeather);
+$('auto').addEventListener('change',()=>{const d=get('wwdata');if(d&&$('auto').checked)render(d)});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&loc&&Date.now()-last>600000)fetchWeather()});
+if(loc){const d=get('wwdata');if(d&&d._loc&&d._loc.name===loc.name)render(d);fetchWeather()}
+}
+</script>
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
+</body>
+</html>
