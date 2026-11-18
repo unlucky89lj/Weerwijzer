@@ -1,11 +1,11 @@
 {
-  "name": "Weerwijzer",
-  "short_name": "Weerwijzer",
+  "name": "Weer & Alarm",
+  "short_name": "Weer & Alarm",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#0f4c81",
-  "theme_color": "#0f4c81",
+  "background_color": "#0b3642",
+  "theme_color": "#0b3642",
   "lang": "nl",
   "icons": [
     {"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
