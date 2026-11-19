@@ -507,12 +507,17 @@ const PLRAW=`Shanghai|31.22|121.46;Beijing|39.91|116.40;Shenzhen|22.55|114.07;Gu
 const NLN={'The Hague':'Den Haag','Brussels':'Brussel','Antwerp':'Antwerpen','Cologne':'Keulen','Munich':'München','Paris':'Parijs','London':'Londen','Tokyo':'Tokio','Cape Town':'Kaapstad','Vienna':'Wenen','Prague':'Praag','Copenhagen':'Kopenhagen','Lisbon':'Lissabon','Rome':'Rome','Milan':'Milaan','Turin':'Turijn','Liège':'Luik','Ghent':'Gent','Bruges':'Brugge','Aachen':'Aken','Strasbourg':'Straatsburg','Dunkirk':'Duinkerke','Lille':'Rijsel','Moscow':'Moskou','Warsaw':'Warschau','Athens':'Athene','Mexico City':'Mexico-Stad','Montreal':'Montréal'};
 let PL=null;const plLoad=()=>PL||(PL=PLRAW.split(';').map(x=>{const[n,la,lo]=x.split('|');return{n:NLN[n]||n,lat:+la,lon:+lo}}));
 function plIn(bb,max){const L2=plLoad(),o=[];for(const p of L2){if(bb.contains([p.lat,p.lon])){o.push(p);if(o.length>=max)break}}return o}
-const DZ=8;let DET=null,DKEY='',VCACHE={};
+const DZ=8;let DET=null,DKEY='',VCACHE={};const RCACHE={};
+async function revName(la,lo){const k=la.toFixed(2)+','+lo.toFixed(2);if(RCACHE[k])return RCACHE[k];
+  try{const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=nl&lat=${la}&lon=${lo}`);const d=await r.json(),a=d.address||{};
+    return RCACHE[k]=a.village||a.town||a.city||a.suburb||a.hamlet||a.municipality||a.county||(d.name)||'Hier'}catch(e){return 'Hier'}}
 async function detailLoad(){
   const m=GM[0]?.m;if(!m)return;const z=m.getZoom();
   if(z<DZ){if(DET){DET=null;gDraw()}return}
   const b=m.getBounds(),key=[z,b.getSouth().toFixed(3),b.getWest().toFixed(3)].join(',');if(key===DKEY)return;DKEY=key;
-  const used=[],P=plIn(b.pad(.05),600).filter(p=>{const pt=m.latLngToLayerPoint([p.lat,p.lon]);if(used.some(o=>Math.abs(o.x-pt.x)<84&&Math.abs(o.y-pt.y)<36))return false;used.push(pt);return true}).slice(0,45);
+  const used=[];let P=plIn(b.pad(.05),600).filter(p=>{const pt=m.latLngToLayerPoint([p.lat,p.lon]);if(used.some(o=>Math.abs(o.x-pt.x)<84&&Math.abs(o.y-pt.y)<36))return false;used.push(pt);return true}).slice(0,45);
+  if(P.length<2){const c=m.getCenter();const nm=await revName(c.lat,c.lng);if(key!==DKEY)return;
+    if(!P.some(p=>p.n===nm))P=[...P,{n:nm,lat:+c.lat.toFixed(3),lon:+c.lng.toFixed(3)}]}
   try{const need=P.filter(p=>!VCACHE[p.lat+','+p.lon]||Date.now()-VCACHE[p.lat+','+p.lon].t>18e5);
     if(need.length){const x=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${need.map(p=>p.lat)}&longitude=${need.map(p=>p.lon)}&current=${Object.keys(VARS)}&models=ecmwf_ifs025&wind_speed_unit=kmh&timezone=auto`);if(!x.ok)throw 0;
       let d=await x.json();d=Array.isArray(d)?d:[d];need.forEach((p,i)=>VCACHE[p.lat+','+p.lon]={t:Date.now(),c:d[i]?.current||{}})}
@@ -550,7 +555,7 @@ function gDraw(){
     const zin=g.m.getZoom()>=DZ,bb=g.m.getBounds().pad(.05);
     const named=(zin&&DET)?DET.pts.filter(p=>p.c[k]!=null).map(p=>[p.n,p.lat,p.lon,p.c[k]]):plIn(bb,400).map(p=>[p.n,p.lat,p.lon,at(p.lat,p.lon)]).filter(x=>x[3]!=null);
     let placed=0;named.forEach(([n,la,lo,v])=>{if(free([la,lo])){put(la,lo,n,v);placed++}});
-    if(!placed){const b=g.m.getBounds(),S=b.getSouth(),Wd=b.getWest(),dy=b.getNorth()-S,dx=b.getEast()-Wd;   // open zee: waarden zonder naam
+    if(!placed&&!zin){const b=g.m.getBounds(),S=b.getSouth(),Wd=b.getWest(),dy=b.getNorth()-S,dx=b.getEast()-Wd;   // open zee: waarden zonder naam
       for(let a=1;a<=3;a++)for(let c=1;c<=4;c++){const la=S+dy*a/4,lo=Wd+dx*c/5,v=at(la,lo);if(v!=null&&free([la,lo]))put(la,lo,'',v)}}
     L.marker([st.lat,st.lon],{icon:L.divIcon({className:'',html:'<div style="width:12px;height:12px;background:#0f3b47;border:2px solid #fff;border-radius:3px"></div>',iconSize:[12,12]})}).bindPopup(esc(st.n)).addTo(g.lay);
     $('sc'+(i+1)).style.background='linear-gradient(90deg,'+stops.map(s=>s[1]).join(',')+')';
