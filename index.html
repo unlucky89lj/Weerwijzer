@@ -124,10 +124,13 @@ main{padding:18px 0 40px}
 .legend{display:flex;gap:14px;font-size:13px;color:var(--muted);margin-top:6px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 iframe{width:100%;border:0;border-radius:10px;display:block;background:light-dark(#dcedf1,#0a2129)}
-.map iframe{height:460px}.radar iframe{height:460px}
-.radar .zeh{margin-top:16px}
-.zeb{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.zeb a{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:12px;background:light-dark(#eef5f6,#0a2129);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:700}
+.map{display:flex;flex-direction:column}.map iframe{flex:1 1 auto;height:auto;min-height:460px}
+.radar{display:flex;flex-direction:column}
+.radar #br{flex:1 1 0;height:auto;min-height:200px}
+.sat{flex:1 1 0;min-height:200px;border-radius:10px;z-index:0}
+.radar .zeh{margin-top:14px}.radar .zeh select{min-height:34px;font-size:14px;color:var(--ink);border-color:var(--line);background:var(--card)}
+.zeb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:13px;color:var(--muted)}
+.zeb a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:0 10px;font-size:13px;border-radius:17px;background:light-dark(#eef5f6,#0a2129);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:700}
 .zeb a:hover,.zeb a:focus-visible{border-color:var(--rain);color:var(--rain)}
 .layers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .layers .chip{color:var(--ink);border-color:var(--line);min-height:36px;font-size:14px}
@@ -147,7 +150,7 @@ ul.ev a{color:inherit}
 .lk a{display:inline-flex;align-items:center;min-height:40px;padding:0 14px;border-radius:20px;border:1px solid var(--line);color:inherit;text-decoration:none;font-size:14px}
 .lk a.a{border-color:var(--alarm)}
 .note{font-size:13px;color:var(--muted);margin:10px 0 0}
-@media(max-width:980px){.now,.chart,.map,.radar,.dis,.eq{grid-column:span 12}.radar iframe{height:380px}}
+@media(max-width:980px){.now,.chart,.map,.radar,.dis,.eq{grid-column:span 12}}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.map iframe{height:360px}input{width:90px}}
 
 /* Nu-in kaart met weerachtergrond */
@@ -242,8 +245,9 @@ body.edit .ed.corner{cursor:nwse-resize}
   <section class="card radar">
     <h2>Buienradar<small>Nederland</small></h2>
     <iframe id="br" title="Buienradar" loading="lazy" scrolling="no"></iframe>
-    <h2 class="zeh">Zoom Earth<small>opent op jouw plek</small></h2>
-    <div class="zeb" id="zeb">
+    <h2 class="zeh">Satelliet<small><select id="satl" aria-label="Satellietbeeld"><option value="msg_fes:ir108">Wolken (live, ook 's nachts)</option><option value="msg_fes:rgb_eview">Kleur (overdag)</option></select></small></h2>
+    <div id="sat" class="sat"></div>
+    <div class="zeb" id="zeb"><span>Zoom Earth:</span>
       <a data-l="satellite" href="https://zoom.earth" target="_blank" rel="noopener">Satelliet</a>
       <a data-l="precipitation" href="https://zoom.earth" target="_blank" rel="noopener">Neerslag</a>
       <a data-l="wind-speed" href="https://zoom.earth" target="_blank" rel="noopener">Wind</a>
@@ -357,8 +361,23 @@ function sky(c){
   const e2=document.getElementById('sky2');
   if(e2){e2.style.background=bg;e2.style.setProperty('--fall',((e2.parentElement.offsetHeight||360)+60)+'px');e2.innerHTML=out.join('');e2.parentElement.classList.add('skyon')}
 }
+let satMap=null,satLayer=null;
 function zoomEarth(lat,lon){
   document.querySelectorAll('#zeb a').forEach(x=>{x.href=`https://zoom.earth/maps/${x.dataset.l}/#view=${(+lat).toFixed(2)},${(+lon).toFixed(2)},6z`});
+  const el=document.getElementById('sat');if(!el||typeof L==='undefined')return;
+  const sel=document.getElementById('satl');
+  if(!satMap){
+    satMap=L.map(el,{zoomControl:true,attributionControl:true,worldCopyJump:true}).setView([lat,lon],5);
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:10,attribution:'Beeld &copy; Esri'}).addTo(satMap);
+    try{sel.value=localStorage.getItem('wa-sat')||sel.value}catch(e){}
+    const setL=()=>{if(satLayer)satMap.removeLayer(satLayer);
+      satLayer=L.tileLayer.wms('https://view.eumetsat.int/geoserver/ows',{layers:sel.value,format:'image/png',transparent:true,version:'1.3.0',opacity:sel.value.includes('ir108')?.8:1,attribution:'Meteosat &copy; EUMETSAT'}).addTo(satMap);
+      try{localStorage.setItem('wa-sat',sel.value)}catch(e){}};
+    sel.addEventListener('change',setL);setL();
+    setInterval(()=>{if(satLayer&&!document.hidden)satLayer.setParams({_:Date.now()})},10*60*1000);
+    new ResizeObserver(()=>satMap.invalidateSize()).observe(el);
+    if(!satMap._mk)satMap._mk=L.circleMarker([lat,lon],{radius:6,color:'#fff',weight:2,fillColor:'#ff6a2b',fillOpacity:1}).addTo(satMap);
+  }else{satMap.setView([lat,lon],satMap.getZoom());satMap._mk.setLatLng([lat,lon])}
 }
 async function weather(){
   try{
