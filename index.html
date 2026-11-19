@@ -180,6 +180,16 @@ body.edit .ed.corner{cursor:nwse-resize}
 .card.dragging{opacity:.55;transform:scale(.98)}
 .card.resizing{transition:none}
 @media(prefers-reduced-motion:no-preference){.card{transition:transform .15s,opacity .15s}}
+
+/* Kop en "Nu in" als een doorlopende lucht */
+main{position:relative;z-index:1}
+body.skyjoin header{overflow:visible;background:transparent}
+body.skyjoin #sky{bottom:auto;height:var(--skyh,100%)}
+body.skyjoin #sky::after{background:linear-gradient(180deg,rgba(0,10,20,.38),rgba(0,10,20,.22) 40%,rgba(0,10,20,.42))}
+body.skyjoin .alerts{position:relative;z-index:2}
+body.skyjoin .now .sky2{display:none}
+body.skyjoin .now.skyon{background:rgba(5,25,35,.18);border:1px solid rgba(255,255,255,.18);box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+body.skyjoin main .grid>.card:not(.now){position:relative;z-index:1}
 </style>
 </head>
 <body>
@@ -337,7 +347,7 @@ function sky(c){
   const G={clear:['#2b86d1,#79c1ee','#07122a,#1b3263'],partly:['#3b88c4,#9ccbe8','#0b1730,#24395e'],cloudy:['#5b7484,#93a8b4','#141d27,#2d3a46'],
     fog:['#7a8a93,#b9c4c9','#1d252b,#3c474e'],rain:['#33495a,#62788a','#0f1820,#26343f'],storm:['#1a222c,#3b4654','#090d12,#1e2630'],snow:['#8aa0b1,#cad7e0','#1e2833,#3d4b58']};
   const bg='linear-gradient(180deg,'+G[kind][day?0:1]+')';el.style.background=bg;
-  const H=el.parentElement.offsetHeight||320,r=Math.random,out=[];
+  const H=el.offsetHeight||el.parentElement.offsetHeight||320,r=Math.random,out=[];
   el.style.setProperty('--fall',(H+60)+'px');
   if(kind==='clear'||kind==='partly'){
     out.push(day?'<i class="k-sun"></i>':'<i class="k-moon"></i>');
@@ -756,6 +766,24 @@ document.getElementById('edit').addEventListener('click',()=>{setEdit(!document.
 document.getElementById('eddone').addEventListener('click',()=>setEdit(false));
 document.getElementById('edreset').addEventListener('click',()=>{try{localStorage.removeItem(KEY)}catch(e){}
   const by=Object.fromEntries(cards.map(c=>[c.dataset.k,c]));cards.forEach(c=>{apply(c,0,0);grid.appendChild(c)});cards.forEach(label);kick()});
+}</script>
+<script>{
+/* ---------- lucht van kop tot onder "Nu in" ---------- */
+const hd=document.querySelector('header'),sk=document.getElementById('sky');
+function joinSky(){
+  const now=document.querySelector('main .grid>.card.now'),first=document.querySelector('main .grid>.card');
+  const on=!!now&&first===now&&now.classList.contains('skyon');
+  document.body.classList.toggle('skyjoin',on);
+  if(on){const h=Math.round(now.getBoundingClientRect().bottom-hd.getBoundingClientRect().top+14);
+    hd.style.setProperty('--skyh',h+'px');sk.style.setProperty('--fall',(h+60)+'px')}
+  else{hd.style.removeProperty('--skyh');sk.style.setProperty('--fall',(hd.offsetHeight+60)+'px')}
+}
+addEventListener('resize',()=>requestAnimationFrame(joinSky));
+const n=document.querySelector('.card.now');
+if(n){new ResizeObserver(joinSky).observe(n);new MutationObserver(joinSky).observe(n,{attributes:true,attributeFilter:['class']})}
+new ResizeObserver(joinSky).observe(hd);
+new MutationObserver(joinSky).observe(document.querySelector('main .grid'),{childList:true});
+joinSky();
 }</script>
 <script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
 </body>
