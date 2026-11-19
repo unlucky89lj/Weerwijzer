@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Weer & Alarm</title>
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0b3642">
@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Weer &amp; Alarm">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -69,7 +70,30 @@
 *{box-sizing:border-box;min-width:0}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Archivo,system-ui,sans-serif;overflow-x:clip}
 .wrap{max-width:1300px;margin:0 auto;padding:0 max(3vw,14px)}
-header{background:var(--sea);color:#e8f6f8;padding:18px 0}
+header{background:var(--sea);color:#e8f6f8;padding:calc(18px + env(safe-area-inset-top)) 0 18px;position:relative;overflow:hidden;isolation:isolate}
+header>.wrap{position:relative;z-index:2}
+header button,header select,header .chip{background-color:rgba(5,25,35,.42);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+#sky{position:absolute;inset:0;z-index:0;pointer-events:none;transition:background 1.2s;background:var(--sea)}
+#sky::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,10,20,.38),rgba(0,10,20,.18) 55%,rgba(0,10,20,.42));z-index:5}
+#sky i{position:absolute;display:block}
+.k-sun{width:240px;height:240px;right:calc(8% - 65px);top:calc(-50px + env(safe-area-inset-top));border-radius:50%;background:radial-gradient(circle,#fffbe6 0 12%,#ffe27a 20%,rgba(255,214,90,.55) 30%,rgba(255,214,90,.18) 46%,rgba(255,214,90,0) 66%);animation:pulse 6s ease-in-out infinite}
+.k-moon{width:64px;height:64px;right:10%;top:calc(22px + env(safe-area-inset-top));border-radius:50%;box-shadow:-14px 8px 0 0 #f3f0d8;filter:drop-shadow(0 0 12px rgba(243,240,216,.5))}
+.k-star{width:2px;height:2px;border-radius:50%;background:#fff;animation:tw 3s ease-in-out infinite}
+.k-cloud{width:var(--w);height:calc(var(--w)*.32);border-radius:999px;background:var(--cc,rgba(255,255,255,.85));filter:blur(1px);animation:drift var(--d) linear infinite;left:-30%}
+.k-cloud::before,.k-cloud::after{content:"";position:absolute;background:inherit;border-radius:50%}
+.k-cloud::before{width:48%;height:150%;left:14%;bottom:20%}.k-cloud::after{width:36%;height:120%;left:48%;bottom:25%}
+.k-drop{width:2px;height:18px;top:-30px;border-radius:2px;background:linear-gradient(rgba(190,225,255,0),rgba(190,225,255,.85));animation:fall var(--d) linear infinite}
+.k-flake{width:var(--s);height:var(--s);top:-12px;border-radius:50%;background:#fff;opacity:.9;animation:snow var(--d) linear infinite}
+.k-fog{left:-20%;width:140%;height:60px;border-radius:50%;background:rgba(230,236,240,.35);filter:blur(14px);animation:fog var(--d) ease-in-out infinite alternate}
+.k-flash{inset:0;background:#fff;opacity:0;animation:flash 7s infinite;z-index:4}
+@keyframes pulse{50%{transform:scale(1.06)}}
+@keyframes tw{50%{opacity:.2}}
+@keyframes drift{to{transform:translateX(160vw)}}
+@keyframes fall{to{transform:translate(var(--dx),var(--fall))}}
+@keyframes snow{25%{transform:translate(10px,calc(var(--fall)*.25))}50%{transform:translate(-8px,calc(var(--fall)*.5))}75%{transform:translate(12px,calc(var(--fall)*.75))}to{transform:translate(var(--dx),var(--fall))}}
+@keyframes fog{to{transform:translateX(12%)}}
+@keyframes flash{0%,91%,95%,100%{opacity:0}92%{opacity:.75}93%{opacity:.1}94%{opacity:.6}}
+@media(prefers-reduced-motion:reduce){#sky i{animation:none!important}.k-drop,.k-flake{display:none}}
 .hd{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between}
 h1{font-size:clamp(26px,3.5vw,38px);line-height:1.05;margin:0;font-weight:800}
 .ctrl{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -124,7 +148,7 @@ ul.ev a{color:inherit}
 </style>
 </head>
 <body>
-<header><div class="wrap hd">
+<header><div id="sky" aria-hidden="true"></div><div class="wrap hd">
   <h1>Weer &amp; Alarm</h1>
   <div class="ctrl" id="places"></div>
   <div class="ctrl srch">
@@ -254,10 +278,44 @@ function maps(){
   $('br').src=`https://gadgets.buienradar.nl/gadget/zoommap/?lat=${blat}&lng=${blon}&overname=2&zoom=8&naam=${encodeURIComponent(st.n)}&size=3&voor=1`;
 }
 
+
+/* ---------- Weerachtergrond in de kop ---------- */
+let skyKey='';
+function sky(c){
+  const el=$('sky');if(!el)return;
+  const w=c.weather_code,day=c.is_day!==0,wind=c.wind_speed_10m||0;
+  const kind=w>=95?'storm':[71,73,75,77,85,86].includes(w)?'snow':(w>=51&&w<=67)||(w>=80&&w<=82)?'rain':[45,48].includes(w)?'fog':w===3?'cloudy':w===2?'partly':'clear';
+  const heavy=[55,65,67,75,82,86,99].includes(w)||w===63||w===73||w===81;
+  const key=kind+day+heavy+Math.round(wind/10);if(key===skyKey)return;skyKey=key;
+  const G={clear:['#2b86d1,#79c1ee','#07122a,#1b3263'],partly:['#3b88c4,#9ccbe8','#0b1730,#24395e'],cloudy:['#5b7484,#93a8b4','#141d27,#2d3a46'],
+    fog:['#7a8a93,#b9c4c9','#1d252b,#3c474e'],rain:['#33495a,#62788a','#0f1820,#26343f'],storm:['#1a222c,#3b4654','#090d12,#1e2630'],snow:['#8aa0b1,#cad7e0','#1e2833,#3d4b58']};
+  el.style.background='linear-gradient(180deg,'+G[kind][day?0:1]+')';
+  const H=el.parentElement.offsetHeight||320,r=Math.random,out=[];
+  el.style.setProperty('--fall',(H+60)+'px');
+  if(kind==='clear'||kind==='partly'){
+    out.push(day?'<i class="k-sun"></i>':'<i class="k-moon"></i>');
+    if(!day)for(let i=0;i<45;i++)out.push(`<i class="k-star" style="left:${r()*100}%;top:${r()*85}%;animation-delay:${r()*3}s;opacity:${.4+r()*.6}"></i>`);
+  }else if(!day&&kind==='cloudy')for(let i=0;i<15;i++)out.push(`<i class="k-star" style="left:${r()*100}%;top:${r()*60}%;opacity:.3"></i>`);
+  const nc={clear:0,partly:3,cloudy:6,fog:2,rain:6,storm:7,snow:5}[kind];
+  const cc=kind==='storm'?'rgba(60,70,82,.95)':kind==='rain'?'rgba(150,165,178,.8)':kind==='cloudy'?'rgba(225,232,238,.75)':day?'rgba(255,255,255,.88)':'rgba(170,185,205,.55)';
+  const sp=Math.max(25,90-wind*1.4);
+  for(let i=0;i<nc;i++){const wd=140+r()*200;out.push(`<i class="k-cloud" style="--w:${wd}px;--cc:${cc};--d:${sp*(0.8+r()*.6)}s;top:${-10+r()*60}%;animation-delay:-${r()*sp}s;opacity:${.7+r()*.3}"></i>`)}
+  if(kind==='rain'||kind==='storm'){
+    const n=heavy||kind==='storm'?110:60,dx=Math.min(140,wind*2.2);
+    for(let i=0;i<n;i++)out.push(`<i class="k-drop" style="left:${-10+r()*115}%;--d:${(.5+r()*.4).toFixed(2)}s;--dx:${dx}px;animation-delay:-${r()*1}s;transform:rotate(-${Math.atan(dx/(H+60))*57.3}deg)"></i>`);
+  }
+  if(kind==='snow'){
+    const n=heavy?90:55,dx=Math.min(120,wind*2);
+    for(let i=0;i<n;i++)out.push(`<i class="k-flake" style="left:${-10+r()*115}%;--s:${2+r()*4}px;--d:${(5+r()*5).toFixed(1)}s;--dx:${dx}px;animation-delay:-${r()*8}s"></i>`);
+  }
+  if(kind==='fog')for(let i=0;i<5;i++)out.push(`<i class="k-fog" style="top:${i*20}%;--d:${8+r()*8}s;animation-delay:-${r()*8}s"></i>`);
+  if(kind==='storm')out.push('<i class="k-flash"></i>');
+  el.innerHTML=out.join('');
+}
 async function weather(){
   try{
-    const u=`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,snowfall,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover&hourly=temperature_2m,apparent_temperature,precipitation,snowfall,weather_code,wind_gusts_10m&forecast_hours=24&timezone=auto&wind_speed_unit=kmh`;
-    const r=await fetch(u);if(!r.ok)throw 0;const d=await r.json(),c=d.current,h=d.hourly;
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,snowfall,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover,is_day&hourly=temperature_2m,apparent_temperature,precipitation,snowfall,weather_code,wind_gusts_10m&forecast_hours=24&timezone=auto&wind_speed_unit=kmh`;
+    const r=await fetch(u);if(!r.ok)throw 0;const d=await r.json(),c=d.current,h=d.hourly;try{sky(c)}catch(e){}
     const minT=Math.min(...h.temperature_2m),wetH=h.precipitation.some((p,i)=>p>0&&h.temperature_2m[i]<=1),ijzel=h.weather_code.some(x=>[56,57,66,67].includes(x));
     const snow=h.snowfall.reduce((a,b)=>a+b,0);
     let w=['','Geen gladheid verwacht','Temperatuur blijft boven 3 °C.'];
