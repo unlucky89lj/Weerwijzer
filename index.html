@@ -125,6 +125,8 @@ main{padding:18px 0 40px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 iframe{width:100%;border:0;border-radius:10px;display:block;background:light-dark(#dcedf1,#0a2129)}
 .map iframe{height:460px}.radar iframe{height:460px}
+.radar .zeh{margin-top:16px}.radar .zeh select{min-height:34px;font-size:14px;color:var(--ink);border-color:var(--line);background:var(--card)}
+.zel{margin:8px 0 0;font-size:14px}.zel a{color:var(--rain)}
 .layers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .layers .chip{color:var(--ink);border-color:var(--line);min-height:36px;font-size:14px}
 .layers .chip[aria-pressed=true]{background:var(--sea);color:#e8f6f8;border-color:var(--sea)}
@@ -145,6 +147,34 @@ ul.ev a{color:inherit}
 .note{font-size:13px;color:var(--muted);margin:10px 0 0}
 @media(max-width:980px){.now,.chart,.map,.radar,.dis,.eq{grid-column:span 12}.radar iframe{height:380px}}
 @media(max-width:600px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.map iframe{height:360px}input{width:90px}}
+
+/* Nu-in kaart met weerachtergrond */
+.now{position:relative;isolation:isolate}
+.sky2{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;border-radius:inherit}
+.sky2 i{position:absolute;display:block}
+.sky2::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,10,20,.30),rgba(0,10,20,.45));z-index:5}
+.sky2 .k-sun{top:-60px;right:-40px}.sky2 .k-moon{top:16px}
+.now>*:not(.sky2){position:relative;z-index:1}
+.now.skyon{color:#fff;border-color:transparent}
+.now.skyon h2 small,.now.skyon .feel,.now.skyon .stat span{color:rgba(255,255,255,.82)}
+.now.skyon .stat{background:rgba(5,25,35,.42);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);color:#fff}
+.now.skyon .temp,.now.skyon .desc{text-shadow:0 1px 8px rgba(0,0,0,.35)}
+/* Indeling aanpassen */
+.edbar{display:none;grid-column:1/-1;align-items:center;flex-wrap:wrap;gap:8px 12px;background:var(--card);border:1.5px dashed var(--alarm);border-radius:14px;padding:10px 14px;font-size:15px}
+body.edit .edbar{display:flex}
+.edbar span{flex:1 1 260px}
+.edbar button{color:var(--ink);border-color:var(--line)}
+.edbar .done{background:var(--alarm);border-color:var(--alarm);color:#1a0a02;font-weight:700}
+.ed{display:none}
+body.edit .card{position:relative;outline:2px dashed color-mix(in srgb,var(--alarm) 60%,transparent);outline-offset:-2px}
+body.edit .card>*:not(.ed){pointer-events:none;user-select:none}
+body.edit .ed{display:block;position:absolute;inset:0;z-index:20;cursor:grab;touch-action:none}
+body.edit .ed.corner{cursor:nwse-resize}
+.ed .sz{position:absolute;top:8px;right:8px;height:28px;line-height:28px;border-radius:14px;padding:0 10px;font:700 13px Archivo,system-ui,sans-serif;background:rgba(5,25,35,.75);color:#fff;opacity:0;transition:opacity .15s}
+.card.resizing .ed .sz{opacity:1}
+.card.dragging{opacity:.55;transform:scale(.98)}
+.card.resizing{transition:none}
+@media(prefers-reduced-motion:no-preference){.card{transition:transform .15s,opacity .15s}}
 </style>
 </head>
 <body>
@@ -163,13 +193,16 @@ ul.ev a{color:inherit}
     <button class="go" id="setc" type="button">Gebruik</button>
     <button id="geo" type="button">Mijn locatie</button>
     <select id="tile" aria-label="Achtergrondkaart"></select>
+    <button id="edit" type="button">Indeling</button>
     <span class="upd" id="upd"></span>
   </div>
 </div></header>
 <div id="alerts" class="alerts" role="alert" hidden></div>
 
 <main><div class="wrap grid">
+  <div class="edbar" id="edbar"><span>Pak een kaart vast en sleep hem naar een andere plek. Sleep de hoek rechtsonder om hem groter of kleiner te maken.</span><button id="edreset" type="button">Standaard</button><button id="eddone" class="done" type="button">Klaar</button></div>
   <section class="card now">
+    <div id="sky2" class="sky2" aria-hidden="true"></div>
     <h2>Nu in <span id="pn">…</span><small id="src">Open-Meteo</small></h2>
     <div id="now"><p>Laden…</p></div>
   </section>
@@ -207,6 +240,9 @@ ul.ev a{color:inherit}
   <section class="card radar">
     <h2>Buienradar<small>Nederland</small></h2>
     <iframe id="br" title="Buienradar" loading="lazy" scrolling="no"></iframe>
+    <h2 class="zeh">Zoom Earth<small><select id="zel" aria-label="Laag van Zoom Earth"><option value="satellite">Satelliet</option><option value="precipitation">Neerslag</option><option value="wind-speed">Wind</option><option value="temperature">Temperatuur</option></select></small></h2>
+    <iframe id="ze" title="Zoom Earth" loading="lazy"></iframe>
+    <p class="zel"><a id="zea" href="https://zoom.earth" target="_blank" rel="noopener">Open in Zoom Earth</a></p>
   </section>
   <section class="card dmap">
     <h2>Rampenkaart<small id="msrc">rampen, stormroutes en aardbevingen, live</small></h2>
@@ -275,6 +311,7 @@ function maps(){
   const {lat,lon}=st;
   $('windy').src=`https://embed.windy.com/embed2.html?lat=${lat}&lon=${lon}&detailLat=${lat}&detailLon=${lon}&zoom=6&level=surface&overlay=${st.layer}&product=ecmwf&menu=&message=true&marker=true&calendar=now&pressure=&type=map&location=coordinates&detail=&metricWind=km%2Fh&metricTemp=%C2%B0C&radarRange=-1`;
   const blat=Math.min(53.6,Math.max(50.7,lat)),blon=Math.min(7.3,Math.max(3.3,lon));
+  zoomEarth(lat,lon);
   $('br').src=`https://gadgets.buienradar.nl/gadget/zoommap/?lat=${blat}&lng=${blon}&overname=2&zoom=8&naam=${encodeURIComponent(st.n)}&size=3&voor=1`;
 }
 
@@ -289,7 +326,7 @@ function sky(c){
   const key=kind+day+heavy+Math.round(wind/10);if(key===skyKey)return;skyKey=key;
   const G={clear:['#2b86d1,#79c1ee','#07122a,#1b3263'],partly:['#3b88c4,#9ccbe8','#0b1730,#24395e'],cloudy:['#5b7484,#93a8b4','#141d27,#2d3a46'],
     fog:['#7a8a93,#b9c4c9','#1d252b,#3c474e'],rain:['#33495a,#62788a','#0f1820,#26343f'],storm:['#1a222c,#3b4654','#090d12,#1e2630'],snow:['#8aa0b1,#cad7e0','#1e2833,#3d4b58']};
-  el.style.background='linear-gradient(180deg,'+G[kind][day?0:1]+')';
+  const bg='linear-gradient(180deg,'+G[kind][day?0:1]+')';el.style.background=bg;
   const H=el.parentElement.offsetHeight||320,r=Math.random,out=[];
   el.style.setProperty('--fall',(H+60)+'px');
   if(kind==='clear'||kind==='partly'){
@@ -311,6 +348,16 @@ function sky(c){
   if(kind==='fog')for(let i=0;i<5;i++)out.push(`<i class="k-fog" style="top:${i*20}%;--d:${8+r()*8}s;animation-delay:-${r()*8}s"></i>`);
   if(kind==='storm')out.push('<i class="k-flash"></i>');
   el.innerHTML=out.join('');
+  const e2=document.getElementById('sky2');
+  if(e2){e2.style.background=bg;e2.style.setProperty('--fall',((e2.parentElement.offsetHeight||360)+60)+'px');e2.innerHTML=out.join('');e2.parentElement.classList.add('skyon')}
+}
+function zoomEarth(lat,lon){
+  const z=document.getElementById('ze'),sel=document.getElementById('zel');if(!z)return;
+  let ly='satellite';try{ly=localStorage.getItem('wa-ze')||ly}catch(e){}sel.value=ly;
+  const u=`https://zoom.earth/maps/${ly}/#view=${(+lat).toFixed(2)},${(+lon).toFixed(2)},6z`;
+  if(z.dataset.u!==u){z.dataset.u=u;z.src=u}document.getElementById('zea').href=u;
+  if(!sel.dataset.b){sel.dataset.b=1;sel.addEventListener('change',()=>{try{localStorage.setItem('wa-ze',sel.value)}catch(e){}zoomEarth(...zoomEarth.ll)})}
+  zoomEarth.ll=[lat,lon];
 }
 async function weather(){
   try{
@@ -630,6 +677,60 @@ $('tile').innerHTML=BASES.map((b,i)=>`<option value="${i}">Kaart: ${b[0]}</optio
 $('tile').addEventListener('change',()=>{st.tile=+$('tile').value;save();ALLM.forEach(setBase)});
 sndBtn();head();maps();
 needL().catch(()=>{}).finally(()=>{all();gLoad();setInterval(all,600000);setInterval(gLoad,1800000)});
+}</script>
+<script>{
+/* ---------- Kaarten verplaatsen en groter/kleiner maken ---------- */
+const grid=document.querySelector('main .grid'),KEY='wa-layout';
+const cards=[...grid.querySelectorAll(':scope>.card')];
+const cnt={};cards.forEach(c=>{const k=c.classList[1]||'card';cnt[k]=(cnt[k]||0)+1;c.dataset.k=k+(cnt[k]>1?'-'+cnt[k]:'')});
+const load=()=>{try{return JSON.parse(localStorage.getItem(KEY))||{}}catch(e){return {}}};
+const save=()=>{const o={order:[...grid.querySelectorAll(':scope>.card')].map(c=>c.dataset.k),size:{}};
+  grid.querySelectorAll(':scope>.card').forEach(c=>{if(c.dataset.c||c.dataset.h)o.size[c.dataset.k]={c:+c.dataset.c||0,h:+c.dataset.h||0}});
+  try{localStorage.setItem(KEY,JSON.stringify(o))}catch(e){}};
+const apply=(c,span,h)=>{if(span){c.dataset.c=span;c.style.gridColumn='span '+span}else{delete c.dataset.c;c.style.gridColumn=''}
+  if(h){c.dataset.h=h;c.style.height=h+'px'}else{delete c.dataset.h;c.style.height=''}};
+const curSpan=c=>+c.dataset.c||Math.max(1,Math.round((c.offsetWidth+gap())/colW()));
+const gap=()=>parseFloat(getComputedStyle(grid).columnGap)||14;
+const colW=()=>{const cs=getComputedStyle(grid);const w=grid.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);return (w-gap()*11)/12+gap()};
+const label=c=>{const b=c.querySelector('.ed .sz');if(b)b.textContent=curSpan(c)+'/12'+(c.dataset.h?' · '+c.dataset.h+'px':'')};
+const kick=()=>{dispatchEvent(new Event('resize'))};
+// opgeslagen indeling terugzetten
+const L=load();
+if(L.order){const by=Object.fromEntries(cards.map(c=>[c.dataset.k,c]));L.order.forEach(k=>by[k]&&grid.appendChild(by[k]));cards.forEach(c=>{if(!L.order.includes(c.dataset.k))grid.appendChild(c)})}
+if(L.size)cards.forEach(c=>{const z=L.size[c.dataset.k];if(z)apply(c,z.c,z.h)});
+// bedieningselementen
+cards.forEach(c=>{
+  const ed=document.createElement('div');ed.className='ed';
+  ed.innerHTML='<span class="sz"></span>';
+  c.appendChild(ed);
+  const inCorner=e=>{const r=c.getBoundingClientRect();return e.clientX>r.right-48&&e.clientY>r.bottom-48};
+  ed.addEventListener('pointermove',e=>{if(!e.buttons)ed.classList.toggle('corner',inCorner(e))});
+  ed.addEventListener('pointerdown',e=>{
+    e.preventDefault();
+    let move,up;
+    if(inCorner(e)){
+      c.classList.add('resizing');label(c);
+      const x0=e.clientX,y0=e.clientY,s0=curSpan(c),h0=c.offsetHeight,cw=colW();
+      move=ev=>{const span=Math.min(12,Math.max(3,Math.round(s0+(ev.clientX-x0)/cw)));const h=Math.max(140,Math.round(h0+ev.clientY-y0));apply(c,span,h);label(c)};
+      up=()=>{c.classList.remove('resizing');done()};
+    }else{
+      c.classList.add('dragging');
+      move=ev=>{c.style.pointerEvents='none';const t=document.elementFromPoint(ev.clientX,ev.clientY);c.style.pointerEvents='';
+        if(ev.clientY<70)scrollBy(0,-18);else if(ev.clientY>innerHeight-70)scrollBy(0,18);
+        const o=t&&t.closest('main .grid>.card');if(!o||o===c)return;const r=o.getBoundingClientRect();
+        const after=ev.clientY>r.bottom-r.height/3||(ev.clientY>r.top+r.height/3&&ev.clientX>r.left+r.width/2);
+        const ref=after?o.nextSibling:o;if(ref!==c&&c.nextSibling!==ref)grid.insertBefore(c,ref)};
+      up=()=>{c.classList.remove('dragging');done()};
+    }
+    const done=()=>{removeEventListener('pointermove',move);removeEventListener('pointerup',up);removeEventListener('pointercancel',up);save();kick()};
+    addEventListener('pointermove',move);addEventListener('pointerup',up);addEventListener('pointercancel',up);
+  });
+});
+const setEdit=on=>{document.body.classList.toggle('edit',on);document.getElementById('edit').setAttribute('aria-pressed',on);if(on)cards.forEach(label);else kick()};
+document.getElementById('edit').addEventListener('click',()=>{setEdit(!document.body.classList.contains('edit'));if(document.body.classList.contains('edit'))grid.scrollIntoView({behavior:'smooth'})});
+document.getElementById('eddone').addEventListener('click',()=>setEdit(false));
+document.getElementById('edreset').addEventListener('click',()=>{try{localStorage.removeItem(KEY)}catch(e){}
+  const by=Object.fromEntries(cards.map(c=>[c.dataset.k,c]));cards.forEach(c=>{apply(c,0,0);grid.appendChild(c)});cards.forEach(label);kick()});
 }</script>
 <script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
 </body>
