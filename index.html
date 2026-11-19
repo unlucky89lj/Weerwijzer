@@ -125,8 +125,10 @@ main{padding:18px 0 40px}
 .legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 iframe{width:100%;border:0;border-radius:10px;display:block;background:light-dark(#dcedf1,#0a2129)}
 .map iframe{height:460px}.radar iframe{height:460px}
-.radar .zeh{margin-top:16px}.radar .zeh select{min-height:34px;font-size:14px;color:var(--ink);border-color:var(--line);background:var(--card)}
-.zel{margin:8px 0 0;font-size:14px}.zel a{color:var(--rain)}
+.radar .zeh{margin-top:16px}
+.zeb{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.zeb a{display:flex;align-items:center;justify-content:center;min-height:48px;border-radius:12px;background:light-dark(#eef5f6,#0a2129);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:700}
+.zeb a:hover,.zeb a:focus-visible{border-color:var(--rain);color:var(--rain)}
 .layers{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .layers .chip{color:var(--ink);border-color:var(--line);min-height:36px;font-size:14px}
 .layers .chip[aria-pressed=true]{background:var(--sea);color:#e8f6f8;border-color:var(--sea)}
@@ -240,9 +242,13 @@ body.edit .ed.corner{cursor:nwse-resize}
   <section class="card radar">
     <h2>Buienradar<small>Nederland</small></h2>
     <iframe id="br" title="Buienradar" loading="lazy" scrolling="no"></iframe>
-    <h2 class="zeh">Zoom Earth<small><select id="zel" aria-label="Laag van Zoom Earth"><option value="satellite">Satelliet</option><option value="precipitation">Neerslag</option><option value="wind-speed">Wind</option><option value="temperature">Temperatuur</option></select></small></h2>
-    <iframe id="ze" title="Zoom Earth" loading="lazy"></iframe>
-    <p class="zel"><a id="zea" href="https://zoom.earth" target="_blank" rel="noopener">Open in Zoom Earth</a></p>
+    <h2 class="zeh">Zoom Earth<small>opent op jouw plek</small></h2>
+    <div class="zeb" id="zeb">
+      <a data-l="satellite" href="https://zoom.earth" target="_blank" rel="noopener">Satelliet</a>
+      <a data-l="precipitation" href="https://zoom.earth" target="_blank" rel="noopener">Neerslag</a>
+      <a data-l="wind-speed" href="https://zoom.earth" target="_blank" rel="noopener">Wind</a>
+      <a data-l="temperature" href="https://zoom.earth" target="_blank" rel="noopener">Temperatuur</a>
+    </div>
   </section>
   <section class="card dmap">
     <h2>Rampenkaart<small id="msrc">rampen, stormroutes en aardbevingen, live</small></h2>
@@ -352,12 +358,7 @@ function sky(c){
   if(e2){e2.style.background=bg;e2.style.setProperty('--fall',((e2.parentElement.offsetHeight||360)+60)+'px');e2.innerHTML=out.join('');e2.parentElement.classList.add('skyon')}
 }
 function zoomEarth(lat,lon){
-  const z=document.getElementById('ze'),sel=document.getElementById('zel');if(!z)return;
-  let ly='satellite';try{ly=localStorage.getItem('wa-ze')||ly}catch(e){}sel.value=ly;
-  const u=`https://zoom.earth/maps/${ly}/#view=${(+lat).toFixed(2)},${(+lon).toFixed(2)},6z`;
-  if(z.dataset.u!==u){z.dataset.u=u;z.src=u}document.getElementById('zea').href=u;
-  if(!sel.dataset.b){sel.dataset.b=1;sel.addEventListener('change',()=>{try{localStorage.setItem('wa-ze',sel.value)}catch(e){}zoomEarth(...zoomEarth.ll)})}
-  zoomEarth.ll=[lat,lon];
+  document.querySelectorAll('#zeb a').forEach(x=>{x.href=`https://zoom.earth/maps/${x.dataset.l}/#view=${(+lat).toFixed(2)},${(+lon).toFixed(2)},6z`});
 }
 async function weather(){
   try{
