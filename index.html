@@ -198,6 +198,20 @@ body.skyjoin .chart.joined{background:rgba(5,25,35,.18);border:1px solid rgba(25
 body.skyjoin .chart.joined h2 small,body.skyjoin .chart.joined .legend{color:rgba(255,255,255,.85)}
 body.skyjoin .now.skyon{background:rgba(5,25,35,.18);border:1px solid rgba(255,255,255,.18);box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
 body.skyjoin main .grid>.card:not(.now):not(.joined){position:relative;z-index:1}
+
+/* Achtergrond-extra's */
+.k-sun.gold{width:300px;height:300px;right:auto;left:62%;background:radial-gradient(circle,#fff1cf 0 9%,#ffc070 18%,rgba(255,150,80,.5) 30%,rgba(255,120,80,.16) 48%,rgba(255,120,80,0) 68%);animation:pulse 8s ease-in-out infinite}
+.k-sun.gold.dawn{left:18%}
+.k-tint{inset:0;z-index:3;mix-blend-mode:soft-light;pointer-events:none}
+.k-tint.cold{background:linear-gradient(180deg,rgba(150,205,255,.55),rgba(110,170,255,.35))}
+.k-tint.hot{background:linear-gradient(180deg,rgba(255,150,70,.5),rgba(255,90,40,.35))}
+.k-frost{left:0;right:0;height:54px;z-index:4;background:linear-gradient(180deg,rgba(225,242,255,0),rgba(225,242,255,.45)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='54'%3E%3Cg stroke='%23f4fbff' stroke-width='1.3' stroke-linecap='round' opacity='.8'%3E%3Cpath d='M14 34v14M7 41h14M9 36l10 10M19 36 9 46'/%3E%3Cpath d='M44 40v9M39.5 44.5h9M41 41l6 7M47 41l-6 7'/%3E%3Cpath d='M30 46v6M27 49h6'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom/60px 54px}
+header.warnsky #sky{box-shadow:inset 0 0 0 3px rgba(255,90,40,.85),inset 0 0 70px rgba(255,60,30,.45);filter:brightness(.88)}
+@media(prefers-reduced-motion:no-preference){header.warnsky #sky{animation:warnpulse 3s ease-in-out infinite}}
+@keyframes warnpulse{50%{box-shadow:inset 0 0 0 3px rgba(255,90,40,.5),inset 0 0 40px rgba(255,60,30,.25)}}
+body.calm #sky i,body.calm .sky2 i{animation-play-state:paused!important}
+body.calm .k-drop,body.calm .k-flake,body.calm .k-flash{display:none}
+#calm[aria-pressed=true]{background:#e8f6f8;color:#0b2128}
 </style>
 </head>
 <body>
@@ -208,6 +222,7 @@ body.skyjoin main .grid>.card:not(.now):not(.joined){position:relative;z-index:1
     <input id="q" type="search" placeholder="Zoek een plaats" autocomplete="off" aria-label="Zoek een plaats">
     <button id="fav" type="button">Bewaar plek</button>
     <button id="snd" type="button" aria-pressed="false">Geluid uit</button>
+    <button id="calm" type="button" aria-pressed="false">Rustig</button>
     <div id="qres" class="qres" hidden></div>
   </div>
   <div class="ctrl">
@@ -346,21 +361,34 @@ function maps(){
 
 /* ---------- Weerachtergrond in de kop ---------- */
 let skyKey='';
+function sunPos(lat,lon,dt){const r=Math.PI/180,d=dt/864e5+2440587.5-2451545,g=(357.529+.98560028*d)*r,q=280.459+.98564736*d,
+  Lm=(q+1.915*Math.sin(g)+.02*Math.sin(2*g))*r,e=(23.439-3.6e-7*d)*r,dec=Math.asin(Math.sin(e)*Math.sin(Lm)),ra=Math.atan2(Math.cos(e)*Math.sin(Lm),Math.cos(Lm))/r;
+  let ha=((18.697374558+24.06570982441908*d)%24)*15+lon-ra;ha=((ha+540)%360)-180;
+  const el=Math.asin(Math.sin(lat*r)*Math.sin(dec)+Math.cos(lat*r)*Math.cos(dec)*Math.cos(ha*r))/r;return{el,ha}}
 function sky(c){
   const el=$('sky');if(!el)return;
   const w=c.weather_code,day=c.is_day!==0,wind=c.wind_speed_10m||0;
   const kind=w>=95?'storm':[71,73,75,77,85,86].includes(w)?'snow':(w>=51&&w<=67)||(w>=80&&w<=82)?'rain':[45,48].includes(w)?'fog':w===3?'cloudy':w===2?'partly':'clear';
   const heavy=[55,65,67,75,82,86,99].includes(w)||w===63||w===73||w===81;
-  const key=kind+day+heavy+Math.round(wind/10);if(key===skyKey)return;skyKey=key;
+  const T=c.temperature_2m??10,hum=c.relative_humidity_2m??0,pr=c.precipitation??0;
+  const se=sunPos(st.lat,st.lon,new Date()),gold=se.el>-5&&se.el<7&&['clear','partly','cloudy'].includes(kind)?(se.ha<0?'dawn':'dusk'):'';
+  const tint=T<=0?'cold':T>=28?'hot':'';
+  const frost=(T<=1&&(hum>=85||pr>0||kind==='snow'||kind==='fog'))||kind==='snow'&&T<=2;
+  const key=kind+day+heavy+Math.round(wind/10)+gold+tint+frost;if(key===skyKey)return;skyKey=key;
   const G={clear:['#2b86d1,#79c1ee','#07122a,#1b3263'],partly:['#3b88c4,#9ccbe8','#0b1730,#24395e'],cloudy:['#5b7484,#93a8b4','#141d27,#2d3a46'],
     fog:['#7a8a93,#b9c4c9','#1d252b,#3c474e'],rain:['#33495a,#62788a','#0f1820,#26343f'],storm:['#1a222c,#3b4654','#090d12,#1e2630'],snow:['#8aa0b1,#cad7e0','#1e2833,#3d4b58']};
-  const bg='linear-gradient(180deg,'+G[kind][day?0:1]+')';el.style.background=bg;
+  const GOLD={dawn:{clear:'#3c5b93,#c98fae 55%,#f7c27e',partly:'#4a6392,#c89aaf 55%,#f2c48e',cloudy:'#56677e,#a8909d 60%,#d9b08e'},
+              dusk:{clear:'#2a2c66,#b4618a 50%,#f2955a',partly:'#34396c,#ad6a8c 52%,#ee9c66',cloudy:'#3d4459,#8c6c7e 58%,#c98f6e'}};
+  const bg='linear-gradient(180deg,'+(gold?GOLD[gold][kind]:G[kind][day?0:1])+')';el.style.background=bg;
   const H=el.offsetHeight||el.parentElement.offsetHeight||320,r=Math.random,out=[];
   el.style.setProperty('--fall',(H+60)+'px');
   if(kind==='clear'||kind==='partly'){
     out.push(day?'<i class="k-sun"></i>':'<i class="k-moon"></i>');
     if(!day)for(let i=0;i<45;i++)out.push(`<i class="k-star" style="left:${r()*100}%;top:${r()*85}%;animation-delay:${r()*3}s;opacity:${.4+r()*.6}"></i>`);
   }else if(!day&&kind==='cloudy')for(let i=0;i<15;i++)out.push(`<i class="k-star" style="left:${r()*100}%;top:${r()*60}%;opacity:.3"></i>`);
+  if(gold){const hh0=el.parentElement.offsetHeight||300;const i=out.findIndex(x=>x.includes('k-sun')||x.includes('k-moon'));const sun=`<i class="k-sun gold ${gold}" style="top:${hh0-170}px"></i>`;if(i>=0)out[i]=sun;else out.push(sun)}
+  if(tint)out.push(`<i class="k-tint ${tint}"></i>`);
+  if(frost){const hh=el.parentElement.offsetHeight||300;out.push(`<i class="k-frost" style="top:${hh-54}px"></i>`)}
   const nc={clear:0,partly:3,cloudy:6,fog:2,rain:6,storm:7,snow:5}[kind];
   const cc=kind==='storm'?'rgba(60,70,82,.95)':kind==='rain'?'rgba(150,165,178,.8)':kind==='cloudy'?'rgba(225,232,238,.75)':day?'rgba(255,255,255,.88)':'rgba(170,185,205,.55)';
   const sp=Math.max(25,90-wind*1.4);
@@ -643,7 +671,7 @@ async function raceWeekend(){
 /* ---------- waarschuwingen ---------- */
 const AL={},seen=new Set();let AC=null;
 const km=(a,b,c,d)=>{const r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 12742*Math.asin(Math.sqrt(x))};
-function setAlerts(src,list){AL[src]=list;const all=Object.values(AL).flat(),el=$('alerts');
+function setAlerts(src,list){AL[src]=list;const all=Object.values(AL).flat(),el=$('alerts');document.querySelector('header').classList.toggle('warnsky',all.length>0);
   if(!all.length){el.hidden=true;el.innerHTML='';return}
   el.hidden=false;el.innerHTML='<div class="wrap">'+all.map((a,i)=>`<button type="button" class="al" data-i="${i}">${esc(a.t||a)}<span class="alg">Toon op kaart</span></button>`).join('')+'</div>';
   el.querySelectorAll('.al').forEach(b=>b.addEventListener('click',()=>showAlert(all[+b.dataset.i])));
@@ -657,6 +685,9 @@ function showAlert(a){
       if(best&&bd<1&&best.openPopup)best.openPopup()})},450);
 }
 function beep(){try{AC=AC||new AudioContext();const t=AC.currentTime;[0,.35].forEach((d,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=i?660:880;g.gain.setValueAtTime(.12,t+d);g.gain.exponentialRampToValueAtTime(.001,t+d+.3);o.connect(g).connect(AC.destination);o.start(t+d);o.stop(t+d+.3)})}catch(e){}}
+(()=>{const b=$('calm');let on=false;try{on=localStorage.getItem('wa-calm')==='1'}catch(e){}
+  const set=v=>{on=v;document.body.classList.toggle('calm',on);b.setAttribute('aria-pressed',on);b.textContent=on?'Rustig aan':'Rustig';try{localStorage.setItem('wa-calm',on?'1':'0')}catch(e){}};
+  set(on);b.addEventListener('click',()=>set(!on))})();
 function sndBtn(){$('snd').textContent=st.snd?'Geluid aan':'Geluid uit';$('snd').setAttribute('aria-pressed',!!st.snd)}
 $('snd').addEventListener('click',()=>{st.snd=!st.snd;save();sndBtn();if(st.snd)beep()});
 
