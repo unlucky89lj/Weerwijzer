@@ -38,7 +38,10 @@
 .qres button:hover,.qres button:focus-visible{background:#eef5f6}.qres small{color:#4a6670}
 .favc{display:inline-flex}.favc .chip:first-child{border-radius:21px 0 0 21px}.favc .x{border-radius:0 21px 21px 0;border-left:0;padding:0 10px}
 .alerts{background:#ff6a2b;color:#1a0a02}.alerts .wrap{padding:10px max(3vw,14px);display:grid;gap:4px;font-weight:700}
-.alerts .wrap div::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a0a02;margin-right:8px;vertical-align:2px}
+.alerts .al{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:2px 4px;color:inherit;font:inherit;font-weight:700;cursor:pointer;min-height:36px}
+.alerts .al:hover,.alerts .al:focus-visible{background:rgba(0,0,0,.08)}
+.alerts .alg{font-size:13px;font-weight:600;text-decoration:underline;opacity:.85}
+.alerts .al::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#1a0a02;margin-right:8px;vertical-align:2px}
 .week,.air{grid-column:span 12}
 .wk{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(118px,1fr);gap:8px;overflow-x:auto;padding-bottom:6px}
 .wd{background:light-dark(#eef5f6,#0a2129);border-radius:12px;padding:10px;font-size:14px}
@@ -127,7 +130,10 @@ iframe{width:100%;border:0;border-radius:10px;display:block;background:light-dar
 .map{display:flex;flex-direction:column}.map iframe{flex:1 1 auto;height:auto;min-height:460px}
 .radar{display:flex;flex-direction:column}
 .radar #br{flex:1 1 0;height:auto;min-height:200px}
-.sat{flex:1 1 0;min-height:200px;border-radius:10px;z-index:0}
+.satw{position:relative;flex:1 1 0;min-height:200px;display:flex}
+.sat{flex:1;min-height:200px;border-radius:10px;z-index:0}
+.satp{position:absolute;left:10px;bottom:10px;z-index:500;width:40px;height:40px;min-height:0;padding:0;border-radius:50%;border:0;background:rgba(5,25,35,.8);color:#fff;font-size:15px;cursor:pointer}
+.satt{position:absolute;left:58px;bottom:18px;z-index:500;background:rgba(5,25,35,.8);color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:10px;pointer-events:none}
 .radar .zeh{margin-top:14px}.radar .zeh select{min-height:34px;font-size:14px;color:var(--ink);border-color:var(--line);background:var(--card)}
 .zeb{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px;font-size:13px;color:var(--muted)}
 .zeb a{display:flex;align-items:center;justify-content:center;min-height:34px;padding:0 10px;font-size:13px;border-radius:17px;background:light-dark(#eef5f6,#0a2129);border:1px solid var(--line);color:var(--ink);text-decoration:none;font-weight:700}
@@ -188,8 +194,10 @@ body.skyjoin #sky{bottom:auto;height:var(--skyh,100%)}
 body.skyjoin #sky::after{background:linear-gradient(180deg,rgba(0,10,20,.38),rgba(0,10,20,.22) 40%,rgba(0,10,20,.42))}
 body.skyjoin .alerts{position:relative;z-index:2}
 body.skyjoin .now .sky2{display:none}
+body.skyjoin .chart.joined{background:rgba(5,25,35,.18);border:1px solid rgba(255,255,255,.18);box-shadow:none;color:#fff}
+body.skyjoin .chart.joined h2 small,body.skyjoin .chart.joined .legend{color:rgba(255,255,255,.85)}
 body.skyjoin .now.skyon{background:rgba(5,25,35,.18);border:1px solid rgba(255,255,255,.18);box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
-body.skyjoin main .grid>.card:not(.now){position:relative;z-index:1}
+body.skyjoin main .grid>.card:not(.now):not(.joined){position:relative;z-index:1}
 </style>
 </head>
 <body>
@@ -255,8 +263,8 @@ body.skyjoin main .grid>.card:not(.now){position:relative;z-index:1}
   <section class="card radar">
     <h2>Buienradar<small>Nederland</small></h2>
     <iframe id="br" title="Buienradar" loading="lazy" scrolling="no"></iframe>
-    <h2 class="zeh">Satelliet<small><select id="satl" aria-label="Satellietbeeld"><option value="msg_fes:ir108">Wolken (live, ook 's nachts)</option><option value="msg_fes:rgb_eview">Kleur (overdag)</option></select></small></h2>
-    <div id="sat" class="sat"></div>
+    <h2 class="zeh">Satelliet<small><select id="satl" aria-label="Kaartlaag"><option value="rain">Buien</option><option value="rain+ir">Buien en wolken</option><option value="ir">Wolken</option></select></small></h2>
+    <div class="satw"><div id="sat" class="sat"></div><button type="button" id="satp" class="satp" aria-label="Speel de buien van de afgelopen 2 uur af">▶</button><span id="satt" class="satt"></span></div>
     <div class="zeb" id="zeb"><span>Zoom Earth:</span>
       <a data-l="satellite" href="https://zoom.earth" target="_blank" rel="noopener">Satelliet</a>
       <a data-l="precipitation" href="https://zoom.earth" target="_blank" rel="noopener">Neerslag</a>
@@ -377,16 +385,29 @@ function zoomEarth(lat,lon){
   const el=document.getElementById('sat');if(!el||typeof L==='undefined')return;
   const sel=document.getElementById('satl');
   if(!satMap){
-    satMap=L.map(el,{zoomControl:true,attributionControl:true,worldCopyJump:true}).setView([lat,lon],5);
+    satMap=L.map(el,{zoomControl:true,attributionControl:true,worldCopyJump:true}).setView([lat,lon],6);
     L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:10,attribution:'Beeld &copy; Esri'}).addTo(satMap);
-    try{sel.value=localStorage.getItem('wa-sat')||sel.value}catch(e){}
-    const setL=()=>{if(satLayer)satMap.removeLayer(satLayer);
-      satLayer=L.tileLayer.wms('https://view.eumetsat.int/geoserver/ows',{layers:sel.value,format:'image/png',transparent:true,version:'1.3.0',opacity:sel.value.includes('ir108')?.8:1,attribution:'Meteosat &copy; EUMETSAT'}).addTo(satMap);
-      try{localStorage.setItem('wa-sat',sel.value)}catch(e){}};
-    sel.addEventListener('change',setL);setL();
-    setInterval(()=>{if(satLayer&&!document.hidden)satLayer.setParams({_:Date.now()})},10*60*1000);
+    try{sel.value=localStorage.getItem('wa-sat2')||'rain'}catch(e){}
+    let ir=null,frames=[],rl=[],cur=-1,timer=null,host='';
+    const tt=document.getElementById('satt'),pb=document.getElementById('satp');
+    const fmt=t=>new Date(t*1000).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+    const show=i=>{if(!rl.length)return;rl.forEach((l,k)=>l.setOpacity(k===i?.85:0));cur=i;tt.textContent='Buien '+fmt(frames[i].time)};
+    const loadRain=async()=>{try{const d=await (await fetch('https://api.rainviewer.com/public/weather-maps.json')).json();host=d.host;
+        frames=(d.radar&&d.radar.past||[]).slice(-12);rl.forEach(l=>satMap.removeLayer(l));
+        rl=frames.map(f=>L.tileLayer(`${host}${f.path}/256/{z}/{x}/{y}/2/1_1.png`,{opacity:0,maxNativeZoom:7,maxZoom:12,attribution:'Buien &copy; RainViewer',zIndex:5}));
+        if(sel.value.includes('rain'))rl.forEach(l=>l.addTo(satMap));show(rl.length-1)}catch(e){tt.textContent='Buien konden niet geladen worden'}};
+    const stop=()=>{clearInterval(timer);timer=null;pb.textContent='▶'};
+    pb.addEventListener('click',()=>{if(timer){stop();show(rl.length-1);return}if(!rl.length)return;pb.textContent='❚❚';let i=0;show(0);
+      timer=setInterval(()=>{i++;if(i>=rl.length){i=0}show(i);if(i===rl.length-1){setTimeout(()=>{},0)}},600)});
+    const setL=()=>{stop();const v=sel.value;
+      if(v.includes('ir')){if(!ir)ir=L.tileLayer.wms('https://view.eumetsat.int/geoserver/ows',{layers:'msg_fes:ir108',format:'image/png',transparent:true,version:'1.3.0',opacity:.55,attribution:'Meteosat &copy; EUMETSAT',zIndex:4});ir.addTo(satMap)}else if(ir)satMap.removeLayer(ir);
+      if(v.includes('rain')){rl.forEach(l=>l.addTo(satMap));show(rl.length-1);pb.hidden=false}else{rl.forEach(l=>satMap.removeLayer(l));tt.textContent='Wolken (Meteosat)';pb.hidden=true}
+      try{localStorage.setItem('wa-sat2',v)}catch(e){}};
+    sel.addEventListener('change',setL);
+    loadRain().then(setL);
+    setInterval(()=>{if(!document.hidden){loadRain().then(setL);if(ir)ir.setParams({_:Date.now()})}},10*60*1000);
     new ResizeObserver(()=>satMap.invalidateSize()).observe(el);
-    if(!satMap._mk)satMap._mk=L.circleMarker([lat,lon],{radius:6,color:'#fff',weight:2,fillColor:'#ff6a2b',fillOpacity:1}).addTo(satMap);
+    satMap._mk=L.circleMarker([lat,lon],{radius:6,color:'#fff',weight:2,fillColor:'#ff6a2b',fillOpacity:1}).addTo(satMap);
   }else{satMap.setView([lat,lon],satMap.getZoom());satMap._mk.setLatLng([lat,lon])}
 }
 async function weather(){
@@ -444,7 +465,7 @@ async function gdacs(){
   try{const r=await fetch('https://www.gdacs.org/gdacsapi/api/events/geteventlist/MAP');if(!r.ok)throw 0;
     const LV={Red:['hi','Rood'],Orange:['mid','Oranje'],Green:['','Groen']};
     GD=((await r.json()).features||[]).filter(f=>f.geometry?.type==='Point').map(f=>{const p=f.properties||{},l=LV[p.alertlevel]||['',p.alertlevel||''],c=f.geometry.coordinates;return{t:p.eventtype,name:p.name,where:p.country,date:String(p.fromdate||''),url:p.url?.report,lv:l[0],lt:l[1],lat:c[1],lon:c[0]}});
-    $('dsrc').textContent='GDACS';renderGd();setAlerts('gd',GD.filter(x=>x.lv==='hi').map(x=>`Rode GDACS-melding: ${TYPES[x.t]||x.t}, ${x.name}`));return}catch(e){}
+    $('dsrc').textContent='GDACS';renderGd();setAlerts('gd',GD.filter(x=>x.lv==='hi').map(x=>({t:`Rode GDACS-melding: ${TYPES[x.t]||x.t}, ${x.name}`,lat:x.lat,lon:x.lon,z:5})));return}catch(e){}
   try{const r=await fetch('https://eonet.gsfc.nasa.gov/api/v3/events?status=open&days=60&limit=300');if(!r.ok)throw 0;
     GD=((await r.json()).events||[]).map(e=>{const g=(e.geometry||[]).at(-1)||{},t=EON[e.categories?.[0]?.id]||'',m=g.magnitudeValue,u=g.magnitudeUnit||'';
       let lv='',lt='Actief';
@@ -580,7 +601,7 @@ async function hurricanes(){
     const ev=await get('status=open');
     const S=ev.map(e=>{const pts=(e.geometry||[]).filter(g=>g.type==='Point').map(g=>({lat:g.coordinates[1],lon:g.coordinates[0],d:g.date,k:/kts/i.test(g.magnitudeUnit||'')?g.magnitudeValue:null}));
       return{name:e.title,pts,last:pts.at(-1)||{}}}).filter(s=>s.pts.length);
-    setAlerts('hur',S.filter(s=>km(st.lat,st.lon,s.last.lat,s.last.lon)<1500).map(s=>`${s.name} op ${Math.round(km(st.lat,st.lon,s.last.lat,s.last.lon))} km van ${st.n}`));
+    setAlerts('hur',S.filter(s=>km(st.lat,st.lon,s.last.lat,s.last.lon)<1500).map(s=>({t:`${s.name} op ${Math.round(km(st.lat,st.lon,s.last.lat,s.last.lon))} km van ${st.n}`,lat:s.last.lat,lon:s.last.lon,z:5})));
     initMap();if(!MAP)return;
     HL=HL||L.layerGroup();HL.clearLayers();
     S.forEach(s=>{for(let j=1;j<s.pts.length;j++){const a=s.pts[j-1],b=s.pts[j];L.polyline([[a.lat,a.lon],[b.lat,b.lon]],{color:cat(b.k)[2],weight:4,opacity:.9}).addTo(HL)}
@@ -624,14 +645,28 @@ const AL={},seen=new Set();let AC=null;
 const km=(a,b,c,d)=>{const r=Math.PI/180,x=Math.sin((c-a)*r/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin((d-b)*r/2)**2;return 12742*Math.asin(Math.sqrt(x))};
 function setAlerts(src,list){AL[src]=list;const all=Object.values(AL).flat(),el=$('alerts');
   if(!all.length){el.hidden=true;el.innerHTML='';return}
-  el.hidden=false;el.innerHTML='<div class="wrap">'+all.map(a=>`<div>${esc(a)}</div>`).join('')+'</div>';
-  const nw=all.filter(a=>!seen.has(a));all.forEach(a=>seen.add(a));if(nw.length&&st.snd)beep()}
+  el.hidden=false;el.innerHTML='<div class="wrap">'+all.map((a,i)=>`<button type="button" class="al" data-i="${i}">${esc(a.t||a)}<span class="alg">Toon op kaart</span></button>`).join('')+'</div>';
+  el.querySelectorAll('.al').forEach(b=>b.addEventListener('click',()=>showAlert(all[+b.dataset.i])));
+  const keys=all.map(a=>a.t||a),nw=keys.filter(a=>!seen.has(a));keys.forEach(a=>seen.add(a));if(nw.length&&st.snd)beep()}
+function showAlert(a){
+  if(!a||a.lat==null){document.querySelector('.card.now')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+  const card=document.querySelector('.card.dmap');if(card)card.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(()=>{if(!MAP)return;MAP.invalidateSize();MAP.flyTo([a.lat,a.lon],a.z||5,{duration:1.2});
+    MAP.once('moveend',()=>{let best=null,bd=1e9;
+      LAY.eachLayer(l=>{if(!l.getLatLng)return;const p=l.getLatLng(),d=Math.abs(p.lat-a.lat)+Math.abs(p.lng-a.lon);if(d<bd){bd=d;best=l}});
+      if(best&&bd<1&&best.openPopup)best.openPopup()})},450);
+}
 function beep(){try{AC=AC||new AudioContext();const t=AC.currentTime;[0,.35].forEach((d,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=i?660:880;g.gain.setValueAtTime(.12,t+d);g.gain.exponentialRampToValueAtTime(.001,t+d+.3);o.connect(g).connect(AC.destination);o.start(t+d);o.stop(t+d+.3)})}catch(e){}}
 function sndBtn(){$('snd').textContent=st.snd?'Geluid aan':'Geluid uit';$('snd').setAttribute('aria-pressed',!!st.snd)}
 $('snd').addEventListener('click',()=>{st.snd=!st.snd;save();sndBtn();if(st.snd)beep()});
 
 /* ---------- zoeken en favorieten ---------- */
 let qt=null,QR=[];
+(()=>{const qr=$('qres');document.body.appendChild(qr);qr.style.position='fixed';qr.style.zIndex='3000';
+  const place=()=>{const r=$('q').getBoundingClientRect();qr.style.top=(r.bottom+6)+'px';qr.style.left=r.left+'px';qr.style.minWidth=Math.max(300,r.width)+'px'};
+  new MutationObserver(()=>{if(!qr.hidden)place()}).observe(qr,{attributes:true,attributeFilter:['hidden'],childList:true});
+  addEventListener('scroll',()=>{if(!qr.hidden)place()},{passive:true});addEventListener('resize',()=>{if(!qr.hidden)place()});
+  document.addEventListener('pointerdown',e=>{if(!qr.hidden&&!qr.contains(e.target)&&e.target!==$('q'))qr.hidden=true});})();
 function pick(p){st={...st,n:p.name,lat:+p.latitude.toFixed(3),lon:+p.longitude.toFixed(3),f1:null};$('qres').hidden=true;$('q').value='';go()}
 $('q').addEventListener('input',()=>{clearTimeout(qt);const q=$('q').value.trim();if(q.length<2){$('qres').hidden=true;return}
   qt=setTimeout(async()=>{try{const r=await fetch('https://geocoding-api.open-meteo.com/v1/search?count=6&language=nl&format=json&name='+encodeURIComponent(q));const d=await r.json();QR=d.results||[];
@@ -690,8 +725,8 @@ async function f1Times(i){
 async function quakes(){
   try{const r=await fetch('https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/4.5_day.geojson');if(!r.ok)throw 0;const d=await r.json();
     const L=d.features.map(f=>({...f.properties,lat:f.geometry.coordinates[1],lon:f.geometry.coordinates[0]})).sort((a,b)=>b.mag-a.mag);
-    QK=L;drawMap();setAlerts('eq',L.filter(p=>p.tsunami).map(p=>`Tsunami-melding na aardbeving M ${nl(p.mag)}: ${p.place}. Kijk op tsunami.gov`));
-    $('eq').innerHTML=L.length?`<ul class="ev">${L.map(p=>`<li><span class="tag ${p.mag>=6.5?'hi':p.mag>=5.5?'mid':''}">M ${nl(p.mag)}</span><span><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.place)}</a>${p.tsunami?' · <b style="color:var(--alarm)">Tsunami-melding, check tsunami.gov</b>':''}</span><span class="when">${new Date(p.time).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></li>`).join('')}</ul>`:'<p>Geen bevingen van M4,5 of zwaarder in de afgelopen 24 uur.</p>';
+    QK=L;drawMap();setAlerts('eq',L.filter(p=>p.tsunami).map(p=>({t:`Tsunami-melding na aardbeving M ${nl(p.mag)}: ${p.place}`,lat:p.lat,lon:p.lon,z:5})));
+    $('eq').innerHTML=L.length?`<ul class="ev">${L.map(p=>`<li><span class="tag ${p.mag>=6.5?'hi':p.mag>=5.5?'mid':''}">M ${nl(p.mag)}</span><span><a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.place)}</a>${p.tsunami?' · <b style="color:var(--alarm)">Tsunami-melding</b>':''}</span><span class="when">${new Date(p.time).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></li>`).join('')}</ul>`:'<p>Geen bevingen van M4,5 of zwaarder in de afgelopen 24 uur.</p>';
   }catch(e){$('eq').innerHTML='<p class="err">USGS-data kon niet geladen worden.</p>'}
 }
 function all(){weather();gdacs();quakes();hurricanes();raceWeekend();week();air();$('upd').textContent='Bijgewerkt '+new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}
@@ -771,17 +806,21 @@ document.getElementById('edreset').addEventListener('click',()=>{try{localStorag
 /* ---------- lucht van kop tot onder "Nu in" ---------- */
 const hd=document.querySelector('header'),sk=document.getElementById('sky');
 function joinSky(){
-  const now=document.querySelector('main .grid>.card.now'),first=document.querySelector('main .grid>.card');
-  const on=!!now&&first===now&&now.classList.contains('skyon');
-  document.body.classList.toggle('skyjoin',on);
-  if(on){const h=Math.round(now.getBoundingClientRect().bottom-hd.getBoundingClientRect().top+14);
+  const cs=[...document.querySelectorAll('main .grid>.card')],now=cs[0]&&cs[0].classList.contains('now')?cs[0]:null;
+  const on=!!now&&now.classList.contains('skyon');
+  if(document.body.classList.contains('skyjoin')!==on)document.body.classList.toggle('skyjoin',on);
+  const ch=on&&cs[1]&&cs[1].classList.contains('chart')?cs[1]:null;
+  cs.forEach(c=>{const w=c===ch;if(c.classList.contains('joined')!==w)c.classList.toggle('joined',w)});
+  if(on){const bot=Math.max(now.getBoundingClientRect().bottom,ch?ch.getBoundingClientRect().bottom:0);const h=Math.round(bot-hd.getBoundingClientRect().top+14);
     hd.style.setProperty('--skyh',h+'px');sk.style.setProperty('--fall',(h+60)+'px')}
   else{hd.style.removeProperty('--skyh');sk.style.setProperty('--fall',(hd.offsetHeight+60)+'px')}
 }
 addEventListener('resize',()=>requestAnimationFrame(joinSky));
 const n=document.querySelector('.card.now');
+const chc=document.querySelector('.card.chart');if(chc)new ResizeObserver(joinSky).observe(chc);
 if(n){new ResizeObserver(joinSky).observe(n);new MutationObserver(joinSky).observe(n,{attributes:true,attributeFilter:['class']})}
 new ResizeObserver(joinSky).observe(hd);
+const alb=document.getElementById('alerts');if(alb){new ResizeObserver(joinSky).observe(alb);new MutationObserver(joinSky).observe(alb,{attributes:true,attributeFilter:['hidden']})}
 new MutationObserver(joinSky).observe(document.querySelector('main .grid'),{childList:true});
 joinSky();
 }</script>
