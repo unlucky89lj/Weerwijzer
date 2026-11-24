@@ -14,6 +14,7 @@ const SYMBOL = c => c===0||c===1 ? "sun.max.fill" : c===2 ? "cloud.sun.fill" : c
   c===45||c===48 ? "cloud.fog.fill" : c>=51&&c<=57 ? "cloud.drizzle.fill" : c>=61&&c<=67 ? "cloud.rain.fill" :
   c>=71&&c<=77 ? "cloud.snow.fill" : c>=80&&c<=82 ? "cloud.heavyrain.fill" : c>=85&&c<=86 ? "cloud.snow.fill" : "cloud.bolt.rain.fill";
 const NIGHT_SYMBOL = c => c<=1 ? "moon.stars.fill" : c===2 ? "cloud.moon.fill" : SYMBOL(c);
+const HSYM = (f, i) => (f.is_day && f.is_day[i] === 0) ? NIGHT_SYMBOL(f.weather_code[i]) : SYMBOL(f.weather_code[i]);
 
 // Zelfde kleuren als de achtergrond in de app
 const GRAD = { clear:["#2b86d1","#79c1ee"], partly:["#3b88c4","#7fb5d9"], cloudy:["#4d6676","#7d93a0"],
@@ -67,9 +68,9 @@ async function getJSON(u, cacheName) {
 async function getWeather(loc) {
   const u = `https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}` +
     `&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,is_day` +
-    `&hourly=temperature_2m,apparent_temperature,precipitation,precipitation_probability,snowfall,weather_code,wind_gusts_10m&past_hours=24&forecast_hours=12` +
+    `&hourly=temperature_2m,apparent_temperature,precipitation,precipitation_probability,snowfall,weather_code,wind_gusts_10m,is_day&past_hours=24&forecast_hours=12` +
     `&minutely_15=precipitation&forecast_minutely_15=12` +
-    `&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&forecast_days=1&timezone=auto`;
+    `&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset,daylight_duration&forecast_days=1&timezone=auto`;
   return getJSON(u, "weer-alarm-widget.json");
 }
 async function getPollen(loc) {
@@ -90,20 +91,31 @@ function future(d) {
   const pick = k => h[k].slice(i0);
   return { i0, time: pick("time"), temperature_2m: pick("temperature_2m"), apparent_temperature: pick("apparent_temperature"),
     precipitation: pick("precipitation"), precipitation_probability: pick("precipitation_probability"), snowfall: pick("snowfall"),
-    weather_code: pick("weather_code"), wind_gusts_10m: pick("wind_gusts_10m") };
+    weather_code: pick("weather_code"), wind_gusts_10m: pick("wind_gusts_10m"), is_day: h.is_day ? pick("is_day") : null };
 }
 
+// Waarschuwingen: hi = echt gevaar (oranje widget), lo = lichte waarschuwing (alleen label)
 function signals(d, f, pollen) {
   const c = d.current, out = [];
-  const gust = Math.max(c.wind_gusts_10m, ...f.wind_gusts_10m), minT = Math.min(...f.temperature_2m);
-  if (f.weather_code.some(x => [56,57,66,67].includes(x))) out.push("IJzel mogelijk");
-  else if (f.snowfall.some(x => x > 0) || f.precipitation.some((p, i) => p > 0 && f.temperature_2m[i] <= 1)) out.push("Kans op gladheid");
-  else if (minT <= 1 && c.relative_humidity_2m > 85) out.push("Kans op rijp");
-  if (gust >= 75) out.push(`Zware windstoten ${Math.round(gust)} km/u`);
-  else if (gust >= 60) out.push(`Harde windstoten ${Math.round(gust)} km/u`);
-  if (f.weather_code.some(x => x >= 95)) out.push("Onweer verwacht");
-  if (pollen.length) out.push("Hooikoorts: " + pollen.join(", "));
+  const gust = Math.max(c.wind_gusts_10m, ...f.wind_gusts_10m), minT = Math.min(c.temperature_2m, ...f.temperature_2m);
+  const at = i => i <= 0 ? "nu" : "vanaf " + hm(f.time[i]);
+  const iz = f.weather_code.findIndex(x => [56,57,66,67].includes(x));
+  const gl = f.time.findIndex((t, i) => (f.snowfall[i] || 0) > 0 || ((f.precipitation[i] || 0) > 0 && f.temperature_2m[i] <= 1));
+  if (iz >= 0) out.push({ t: "IJzel " + at(iz), sub: "Spiegelglad. Eigen inschatting, geen KNMI-waarschuwing.", lvl: "hi" });
+  else if (gl >= 0) out.push({ t: "Kans op gladheid " + at(gl), sub: `Neerslag bij ${nl(minT)} °C. Eigen inschatting.`, lvl: "hi" });
+  else if (minT <= 1 && c.relative_humidity_2m > 85) out.push({ t: "Kans op rijp en plaatselijke gladheid", sub: `Vochtig en het koelt af tot ${nl(minT)} °C. Eigen inschatting.`, lvl: "lo" });
+  if (gust >= 75) out.push({ t: `Zware windstoten ${Math.round(gust)} km/u`, sub: "Blijf uit de buurt van bomen.", lvl: "hi" });
+  else if (gust >= 60) out.push({ t: `Harde windstoten ${Math.round(gust)} km/u`, sub: "", lvl: "lo" });
+  const on = f.weather_code.findIndex(x => x >= 95);
+  if (on >= 0) out.push({ t: "Onweer " + at(on), sub: "", lvl: "hi" });
+  if (pollen.length) out.push({ t: "Hooikoorts: " + pollen.join(", "), sub: "Veel pollen in de lucht.", lvl: "lo" });
   return out;
+}
+function moon(dt) {
+  const syn = 29.530588853, ref = Date.UTC(2000, 0, 6, 18, 14), age = (((dt - ref)/864e5) % syn + syn) % syn, fr = (1 - Math.cos(2*Math.PI*age/syn))/2;
+  const n = age<1.85?"Nieuwe maan":age<5.54?"Wassende sikkel":age<9.23?"Eerste kwartier":age<12.92?"Wassende maan":age<16.61?"Volle maan":age<20.30?"Afnemende maan":age<23.99?"Laatste kwartier":age<27.68?"Afnemende sikkel":"Nieuwe maan";
+  const sym = age<1.85||age>=27.68?"moonphase.new.moon":age<5.54?"moonphase.waxing.crescent":age<9.23?"moonphase.first.quarter":age<12.92?"moonphase.waxing.gibbous":age<16.61?"moonphase.full.moon":age<20.30?"moonphase.waning.gibbous":age<23.99?"moonphase.last.quarter":"moonphase.waning.crescent";
+  return { n, pct: Math.round(fr*100), sym };
 }
 
 function rainLine(d, f) {
@@ -155,12 +167,12 @@ function medium(w, d, f, c, day, sig, loc) {
   // links: icoon + temperatuur, omschrijving, gevoel
   const L = top.addStack(); L.layoutVertically();
   const tr = L.addStack(); tr.centerAlignContent();
-  sfImg(tr, sig.length ? "exclamationmark.triangle.fill" : day ? SYMBOL(c.weather_code) : NIGHT_SYMBOL(c.weather_code), 30);
+  sfImg(tr, sig.some(x => x.lvl === "hi") ? "exclamationmark.triangle.fill" : day ? SYMBOL(c.weather_code) : NIGHT_SYMBOL(c.weather_code), 30);
   tr.addSpacer(8);
   txt(tr, `${Math.round(c.temperature_2m)}°`, 34, { bold: true, min: 0.6 });
   L.addSpacer(2);
   const pt = ptype(f);
-  txt(L, sig.length ? sig[0] : pt || (WMO[c.weather_code] || ""), 14, { bold: true, min: 0.55 });
+  txt(L, sig.length ? sig[0].t : pt || (WMO[c.weather_code] || ""), 14, { bold: true, min: 0.55 });
   txt(L, `${loc.name ? loc.name + " · " : ""}Voelt als ${Math.round(c.apparent_temperature)}°`, 12, { color: soft(0.8), min: 0.55 });
   top.addSpacer();
   // rechts: drie korte regels
@@ -181,11 +193,81 @@ function medium(w, d, f, c, day, sig, loc) {
     const col = row.addStack(); col.layoutVertically(); col.size = new Size(40, 0);
     const tt = col.addStack(); tt.addSpacer(); txt(tt, (i === 0 ? "Nu" : String(+f.time[i].slice(11, 13)) + "u"), 12, { color: soft(0.8), min: 0.7 }); tt.addSpacer();
     col.addSpacer(3);
-    const ic = col.addStack(); ic.addSpacer(); sfImg(ic, SYMBOL(f.weather_code[i]), 18); ic.addSpacer();
+    const ic = col.addStack(); ic.addSpacer(); sfImg(ic, HSYM(f, i), 18); ic.addSpacer();
     col.addSpacer(2);
     const tp = col.addStack(); tp.addSpacer(); txt(tp, `${Math.round(f.temperature_2m[i])}°`, 12, { bold: true, min: 0.7 }); tp.addSpacer();
     if (k < idx.length - 1) row.addSpacer();
   });
+  w.refreshAfterDate = new Date(Date.now() + 15*60*1000);
+}
+
+
+// Groot: zelfde regels als "Nu in" in de app
+function large(w, d, f, c, day, sig, loc, severe) {
+  w.setPadding(14, 16, 12, 16);
+  const top = w.addStack(); top.centerAlignContent();
+  const L = top.addStack(); L.layoutVertically();
+  txt(L, loc.name || "Mijn locatie", 15, { bold: true, min: 0.7 });
+  txt(L, WMO[c.weather_code] || "", 13, { color: soft(0.85) });
+  top.addSpacer();
+  sfImg(top, severe ? "exclamationmark.triangle.fill" : day ? SYMBOL(c.weather_code) : NIGHT_SYMBOL(c.weather_code), 32);
+  w.addSpacer(2);
+  const tr = w.addStack(); tr.bottomAlignContent();
+  txt(tr, `${Math.round(c.temperature_2m)}°`, 46, { bold: true });
+  tr.addSpacer(10);
+  const fs = tr.addStack(); fs.layoutVertically();
+  txt(fs, `Voelt als ${Math.round(c.apparent_temperature)}°`, 14, { color: soft(0.9) });
+  const yIdx = f.i0 - 24;
+  if (yIdx >= 0) { const diff = Math.round(c.temperature_2m - d.hourly.temperature_2m[yIdx]); txt(fs, diff === 0 ? "Even warm als gisteren" : `${Math.abs(diff)}° ${diff < 0 ? "kouder" : "warmer"} dan gisteren`, 11, { color: soft(0.75) }); }
+  fs.addSpacer(6);
+
+  // Regels zoals in de app
+  w.addSpacer(8);
+  const row = (sym, text, bold) => { const r = w.addStack(); r.centerAlignContent(); const ic = r.addStack(); ic.size = new Size(22, 18); sfImg(ic, sym, 15, 0.9); r.addSpacer(8); txt(r, text, 13, { bold, min: 0.6 }); w.addSpacer(5); };
+  const pt = ptype(f);
+  if (pt) row("cloud.sleet.fill", pt, true);
+  row("cloud.rain", rainLine(d, f));
+  const rainSoon = f.precipitation.slice(0, 4).some(v => v >= 0.2);
+  row("tshirt", clothes(c.apparent_temperature, c.wind_gusts_10m, rainSoon));
+  const nowS = bikeScore(c.apparent_temperature, c.precipitation, c.wind_gusts_10m);
+  const sc = f.time.map((t, i) => ({ t, s: bikeScore(f.apparent_temperature[i], f.precipitation[i], f.wind_gusts_10m[i]) }));
+  const day7 = sc.filter(o => { const h = +o.t.slice(11, 13); return h >= 7 && h <= 21; });
+  const best = (day7.length ? day7 : sc).reduce((a, b) => b.s > a.s ? b : a, sc[0]);
+  row("bicycle", `Fietsweer nu ${nowS}/10` + (best && best.s > nowS ? ` · beste ${hm(best.t)} (${best.s}/10)` : ""));
+  if (d.daily && d.daily.sunrise) {
+    const dur = d.daily.daylight_duration ? d.daily.daylight_duration[0] : 0;
+    row("sunrise", `Zon op ${hm(d.daily.sunrise[0])} · onder ${hm(d.daily.sunset[0])}` + (dur ? ` · ${Math.floor(dur/3600)} u ${Math.round(dur%3600/60)} m licht` : ""));
+  }
+  const mo = moon(Date.now());
+  row(mo.sym, `${mo.n}, ${mo.pct}% verlicht`);
+
+  // Waarschuwingsvak zoals in de app
+  if (sig.length) {
+    w.addSpacer(3);
+    const s = sig[0], box = w.addStack(); box.layoutVertically(); box.cornerRadius = 12; box.setPadding(8, 10, 8, 10);
+    box.backgroundColor = severe ? new Color("#1a0a02", 0.55) : new Color("#2c2410", 0.85);
+    const bar = box.addStack(); bar.addSpacer(0);
+    txt(box, s.t, 14, { bold: true, color: severe ? Color.white() : new Color("#f6cf6b"), min: 0.6 });
+    if (s.sub) txt(box, s.sub, 11, { color: severe ? soft(0.85) : new Color("#e9c977"), min: 0.6, lines: 2 });
+    if (sig[1]) txt(box, "+ " + sig.slice(1).map(x => x.t).join(" · "), 11, { color: soft(0.8), min: 0.6 });
+  }
+
+  // Uurverwachting met maan 's nachts
+  w.addSpacer();
+  const hr = w.addStack();
+  const n = Math.min(6, f.time.length);
+  for (let i = 0; i < n; i++) {
+    const col = hr.addStack(); col.layoutVertically(); col.size = new Size(44, 0);
+    const a = col.addStack(); a.addSpacer(); txt(a, i === 0 ? "Nu" : hm(f.time[i]), 11, { color: soft(0.8), min: 0.7 }); a.addSpacer();
+    col.addSpacer(2);
+    const b = col.addStack(); b.addSpacer(); sfImg(b, HSYM(f, i), 18); b.addSpacer();
+    col.addSpacer(2);
+    const t = col.addStack(); t.addSpacer(); txt(t, `${Math.round(f.temperature_2m[i])}°`, 13, { bold: true }); t.addSpacer();
+    const p = col.addStack(); p.addSpacer(); txt(p, `${f.precipitation_probability[i] ?? 0}%`, 10, { color: new Color("#bfe3ff") }); p.addSpacer();
+    if (i < n - 1) hr.addSpacer();
+  }
+  w.addSpacer(4);
+  txt(w, (d._offline ? "Offline · " : "Bijgewerkt ") + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }), 9, { color: soft(0.6) });
   w.refreshAfterDate = new Date(Date.now() + 15*60*1000);
 }
 
@@ -210,9 +292,10 @@ async function build() {
   // Achtergrond: zelfde logica als de app
   const se = sunPos(loc.lat, loc.lon, new Date());
   const gold = se.el > -5 && se.el < 7 && ["clear","partly","cloudy"].includes(kind) ? (se.ha < 0 ? "dawn" : "dusk") : "";
-  let cols = sig.length ? WARN : gold ? GOLD[gold] : (day ? GRAD : NIGHT)[kind];
-  if (!sig.length && c.temperature_2m <= 0) cols = cols.map(x => mix(x, "#7fb8ff", 0.25));
-  if (!sig.length && c.temperature_2m >= 28) cols = cols.map(x => mix(x, "#ff8a3d", 0.25));
+  const severe = sig.some(x => x.lvl === "hi");
+  let cols = severe ? WARN : gold ? GOLD[gold] : (day ? GRAD : NIGHT)[kind];
+  if (!severe && c.temperature_2m <= 0) cols = cols.map(x => mix(x, "#7fb8ff", 0.25));
+  if (!severe && c.temperature_2m >= 28) cols = cols.map(x => mix(x, "#ff8a3d", 0.25));
   const grad = new LinearGradient();
   grad.colors = cols.map(x => new Color(x));
   grad.locations = cols.length === 3 ? [0, 0.55, 1] : [0, 1];
@@ -220,70 +303,24 @@ async function build() {
 
   if (fam === "medium") { medium(w, d, f, c, day, sig, loc); return w; }
 
-  // Plaats + icoon
+  if (fam === "large") { large(w, d, f, c, day, sig, loc, severe); return w; }
+
+  // Klein
   const top = w.addStack(); top.centerAlignContent();
   const left = top.addStack(); left.layoutVertically();
   txt(left, loc.name || "Mijn locatie", 13, { bold: true, min: 0.7 });
   txt(left, WMO[c.weather_code] || "", 11, { color: soft(0.85), min: 0.7 });
   top.addSpacer();
-  const sym = SFSymbol.named(sig.length ? "exclamationmark.triangle.fill" : day ? SYMBOL(c.weather_code) : NIGHT_SYMBOL(c.weather_code));
-  if (sym) { const img = top.addImage(sym.image); img.imageSize = new Size(24, 24); img.tintColor = Color.white(); }
-
-  // Temperatuur, gevoel, gisteren
+  sfImg(top, severe ? "exclamationmark.triangle.fill" : day ? SYMBOL(c.weather_code) : NIGHT_SYMBOL(c.weather_code), 22);
   w.addSpacer(2);
   const tr = w.addStack(); tr.bottomAlignContent();
-  txt(tr, `${Math.round(c.temperature_2m)}°`, fam === "small" ? 34 : 40, { bold: true });
-  tr.addSpacer(8);
-  const fs = tr.addStack(); fs.layoutVertically();
-  txt(fs, `Voelt ${Math.round(c.apparent_temperature)}°`, 12, { color: soft(0.9) });
-  const yIdx = f.i0 - 24;
-  if (yIdx >= 0) {
-    const diff = Math.round(c.temperature_2m - d.hourly.temperature_2m[yIdx]);
-    txt(fs, diff === 0 ? "Als gisteren" : `${Math.abs(diff)}° ${diff < 0 ? "kouder" : "warmer"} dan gisteren`, 10, { color: soft(0.75), min: 0.7 });
-  } else if (d.daily) {
-    txt(fs, `${Math.round(d.daily.temperature_2m_min[0])}° / ${Math.round(d.daily.temperature_2m_max[0])}°`, 11, { color: soft(0.75) });
-  }
-
-  // Waarschuwing of neerslag
-  w.addSpacer(5);
+  txt(tr, `${Math.round(c.temperature_2m)}°`, 34, { bold: true });
+  tr.addSpacer(6);
+  txt(tr, `voelt ${Math.round(c.apparent_temperature)}°`, 11, { color: soft(0.85), min: 0.7 });
+  w.addSpacer(4);
   const pt = ptype(f);
-  if (sig.length) {
-    const s = w.addStack(); s.backgroundColor = new Color("#1a0a02", 0.8); s.cornerRadius = 8; s.setPadding(3, 8, 3, 8);
-    txt(s, "⚠︎ " + sig.slice(0, fam === "small" ? 1 : 2).join(" · "), 11, { bold: true, min: 0.6 });
-  } else if (pt) {
-    txt(w, pt, 11, { bold: true, min: 0.7 });
-  }
-  if (fam !== "small") {
-    w.addSpacer(3);
-    txt(w, rainLine(d, f), 11, { bold: !sig.length && !pt, min: 0.7 });
-    const nowS = bikeScore(c.apparent_temperature, c.precipitation, c.wind_gusts_10m);
-    const sc = f.time.map((t, i) => ({ t, s: bikeScore(f.apparent_temperature[i], f.precipitation[i], f.wind_gusts_10m[i]) }));
-    const best = sc.reduce((a, b) => b.s > a.s ? b : a, sc[0]);
-    txt(w, `Fietsweer ${nowS}/10` + (best && best.s > nowS ? ` · beste ${hm(best.t)} (${best.s})` : "") +
-      ` · wind ${DIRS[Math.round(c.wind_direction_10m/45) % 8]} ${Math.round(c.wind_speed_10m)}`, 11, { color: soft(0.88), min: 0.6 });
-  } else if (!sig.length && !pt) {
-    txt(w, rainLine(d, f), 11, { bold: true, min: 0.6, lines: 2 });
-  }
-
-  // Groot: kleding, zon en uurverwachting
-  if (fam === "large") {
-    w.addSpacer(6);
-    const rainSoon = f.precipitation.slice(0, 4).some(v => v >= 0.2);
-    txt(w, "Kleding: " + clothes(c.apparent_temperature, c.wind_gusts_10m, rainSoon), 11, { color: soft(0.9), min: 0.6 });
-    if (d.daily && d.daily.sunrise) txt(w, `Zon op ${hm(d.daily.sunrise[0])} · onder ${hm(d.daily.sunset[0])}`, 11, { color: soft(0.8) });
-    w.addSpacer(8);
-    const row = w.addStack();
-    for (let i = 0; i < Math.min(6, f.time.length); i++) {
-      const col = row.addStack(); col.layoutVertically(); col.centerAlignContent();
-      txt(col, hm(f.time[i]), 11, { color: soft(0.8) });
-      const si = SFSymbol.named(SYMBOL(f.weather_code[i]));
-      if (si) { const im = col.addImage(si.image); im.imageSize = new Size(20, 20); im.tintColor = Color.white(); }
-      txt(col, `${Math.round(f.temperature_2m[i])}°`, 14, { bold: true });
-      txt(col, `${f.precipitation_probability[i] ?? 0}%`, 10, { color: new Color("#bfe3ff") });
-      if (i < 5) row.addSpacer();
-    }
-  }
-
+  if (sig.length) { const s = w.addStack(); s.backgroundColor = new Color("#1a0a02", 0.75); s.cornerRadius = 7; s.setPadding(2, 6, 2, 6); txt(s, sig[0].t, 10, { bold: true, min: 0.6, lines: 2 }); }
+  else txt(w, pt || rainLine(d, f), 11, { bold: true, min: 0.6, lines: 2 });
   w.addSpacer();
   txt(w, (d._offline ? "Offline · " : "Bijgewerkt ") + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" }), 9, { color: soft(0.6) });
   w.refreshAfterDate = new Date(Date.now() + 15*60*1000);
