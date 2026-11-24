@@ -461,6 +461,13 @@ function rainLine(c,h,m){
   }
   const k=h.precipitation.findIndex(v=>wet(v));return k<0?'Komende 24 uur droog':'Droog tot '+hm(h.time[k]);
 }
+function ptype(h){
+  for(let i=0;i<Math.min(12,h.time.length);i++){const w=h.weather_code[i],t=h.temperature_2m[i],sn=h.snowfall[i]||0,pr=h.precipitation[i]||0,at=i===0?'nu':'om '+hm(h.time[i]);
+    if(w===96||w===99)return['hail','Kans op hagel '+at];
+    if([56,57,66,67].includes(w))return['ice','IJzel '+at+': spiegelglad'];
+    if(sn>0&&t>0.5&&t<=3&&pr>sn*0.7)return['sleet','Natte sneeuw '+at];
+    if(sn>0)return['snow','Sneeuw '+at+(sn>=1?' ('+String(Math.round(sn*10)/10).replace('.',',')+' cm per uur)':'')];
+  }return null}
 function clothes(f,wind,rainSoon){
   const a=f<=-5?'Dikke winterjas, muts, sjaal en handschoenen':f<=2?'Dikke jas en handschoenen':f<=8?'Warme jas':f<=14?'Jas of dikke trui':f<=20?'Trui of dun jasje':f<=26?'T-shirt':'Luchtige kleding, drink genoeg';
   return a+(rainSoon?', paraplu of regenjas mee':'')+(wind>=50?', let op harde windstoten':'');
@@ -482,9 +489,11 @@ async function extras(c,h,m){
     bike:'<svg viewBox="0 0 24 24"><circle cx="6" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 16l4-8h5l3 8M10 8l2 8h-6M14 5h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     sun:'<svg viewBox="0 0 24 24"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7V4M5.6 10.6 3.5 8.5M18.4 10.6l2.1-2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'};
   const sCls=nowS>=8?'good':nowS>=5?'ok':'bad';
-  x.innerHTML=row(I.rain,rainLine(c,h,m))+row(I.cl,clothes(c.apparent_temperature,c.wind_gusts_10m,rainSoon))+
+  const pt=ptype(h);const PI={hail:'<svg viewBox="0 0 24 24"><path d="M7 13a5 5 0 1 1 1-9.9A6 6 0 0 1 19 7a4 4 0 0 1-1 7.9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="8" cy="18" r="1.6" fill="currentColor"/><circle cx="13" cy="20" r="1.6" fill="currentColor"/><circle cx="17" cy="17" r="1.6" fill="currentColor"/></svg>',
+    snow:'<svg viewBox="0 0 24 24"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'};PI.sleet=PI.snow;PI.ice=PI.hail;
+  x.innerHTML=(pt?row(PI[pt[0]],'<b>'+pt[1]+'</b>','ptype'):'')+row(I.rain,rainLine(c,h,m))+row(I.cl,clothes(c.apparent_temperature,c.wind_gusts_10m,rainSoon))+
     row(I.bike,`Fietsweer nu <b class="bs ${sCls}">${nowS}/10</b>`+(best&&best.s>nowS?` · beste moment ${hm(best.t)} (${best.s}/10)`:''))+
-    `<div class="xr" id="sunmoon">${'<span class="xi" aria-hidden="true">'+I.sun+'</span>'}<span>Zon en maan laden…</span></div>`;
+    `<div class="xr" id="sunmoon">${'<span class="xi" aria-hidden="true">'+I.sun+'</span>'}<span>Zon en maan laden…</span></div>`+(window.POLH||'');
   try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&hourly=temperature_2m&daily=sunrise,sunset,daylight_duration&past_days=1&forecast_days=1&timezone=auto`);
     const d=await r.json(),dl=d.daily,ht=d.hourly;
     // gisteren op hetzelfde uur
@@ -738,7 +747,7 @@ function notify(list){try{if(!('Notification' in window)||Notification.permissio
   const fresh=list.filter(t=>!sent[t]||Date.now()-sent[t]>12*36e5);if(!fresh.length)return;fresh.forEach(t=>sent[t]=Date.now());try{localStorage.setItem('wa-sent',JSON.stringify(sent))}catch(e){}
   navigator.serviceWorker.ready.then(r=>fresh.slice(0,3).forEach(t=>r.showNotification('Weer & Alarm',{body:t,icon:'icon-192.png',badge:'icon-192.png',tag:t})))}catch(e){}}
 function showAlert(a){
-  if(!a||a.lat==null){document.querySelector('.card.now')?.scrollIntoView({behavior:'smooth',block:'start'});return}
+  if(!a||a.lat==null){document.querySelector(a&&a.go||'.card.now')?.scrollIntoView({behavior:'smooth',block:'start'});return}
   const card=document.querySelector('.card.dmap');if(card)card.scrollIntoView({behavior:'smooth',block:'center'});
   setTimeout(()=>{if(!MAP)return;MAP.invalidateSize();MAP.flyTo([a.lat,a.lon],a.z||5,{duration:1.2});
     MAP.once('moveend',()=>{let best=null,bd=1e9;
@@ -801,6 +810,10 @@ async function air(){
     const pol=P.filter(p=>c[p[0]]!=null);
     h+=pol.length?pol.map(p=>{const v=c[p[0]],l=lv(v,p[2]);return box(p[1],nl(v,0)+' korrels/m³',l,L4[l])}).join(''):box('Pollen','niet beschikbaar',-1);
     $('ag').innerHTML=h;$('airsrc').textContent='Open-Meteo · '+st.n;
+    const hi=pol.filter(p=>lv(c[p[0]],p[2])>=2);
+    setAlerts('pollen',hi.length?[{t:`Hooikoorts: ${hi.map(p=>p[1].toLowerCase()+' '+L4[lv(c[p[0]],p[2])].toLowerCase()).join(', ')} in ${st.n}`,go:'.card.air'}]:[]);
+    const xp=document.getElementById('xpol');if(xp)xp.remove();
+    window.POLH=hi.length?`<div class="xr" id="xpol"><span class="xi" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21V11M12 11c0-4 3-7 7-7 0 4-3 7-7 7zM12 14c0-3-2.5-5.5-6-5.5 0 3.5 2.5 5.5 6 5.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span><span>Hooikoorts: <b>${hi.map(p=>p[1].toLowerCase()).join(', ')} ${L4[Math.max(...hi.map(p=>lv(c[p[0]],p[2])))].toLowerCase()}</b></span></div>`:'';if(POLH&&$('xtra'))$('xtra').insertAdjacentHTML('beforeend',POLH);
   }catch(e){$('ag').innerHTML='<p class="err">UV en luchtkwaliteit konden niet geladen worden.</p>'}
 }
 
