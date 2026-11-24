@@ -141,6 +141,54 @@ function txt(stack, s, size, opts = {}) {
 }
 const soft = a => new Color("#ffffff", a);
 
+
+// Middelgroot: compact, alles past in het vak
+function sfImg(stack, name, size, alpha = 1) {
+  const sf = SFSymbol.named(name); if (!sf) return null;
+  sf.applyFont(Font.systemFont(size));
+  const im = stack.addImage(sf.image); im.imageSize = new Size(size, size); im.tintColor = soft(alpha);
+  return im;
+}
+function medium(w, d, f, c, day, sig, loc) {
+  w.setPadding(12, 14, 10, 14);
+  const top = w.addStack(); top.centerAlignContent();
+  // links: icoon + temperatuur, omschrijving, gevoel
+  const L = top.addStack(); L.layoutVertically();
+  const tr = L.addStack(); tr.centerAlignContent();
+  sfImg(tr, sig.length ? "exclamationmark.triangle.fill" : day ? SYMBOL(c.weather_code) : NIGHT_SYMBOL(c.weather_code), 30);
+  tr.addSpacer(8);
+  txt(tr, `${Math.round(c.temperature_2m)}°`, 34, { bold: true, min: 0.6 });
+  L.addSpacer(2);
+  const pt = ptype(f);
+  txt(L, sig.length ? sig[0] : pt || (WMO[c.weather_code] || ""), 14, { bold: true, min: 0.55 });
+  txt(L, `${loc.name ? loc.name + " · " : ""}Voelt als ${Math.round(c.apparent_temperature)}°`, 12, { color: soft(0.8), min: 0.55 });
+  top.addSpacer();
+  // rechts: drie korte regels
+  const R = top.addStack(); R.layoutVertically(); R.size = new Size(112, 0);
+  const gust = Math.max(c.wind_gusts_10m, ...f.wind_gusts_10m.slice(0, 6));
+  const rain = f.precipitation.slice(0, 6).reduce((a, b) => a + b, 0);
+  const hi = d.daily ? Math.round(d.daily.temperature_2m_max[0]) : Math.round(Math.max(...f.temperature_2m));
+  const lo = d.daily ? Math.round(d.daily.temperature_2m_min[0]) : Math.round(Math.min(...f.temperature_2m));
+  const line = (sym, text) => { const r = R.addStack(); r.centerAlignContent(); sfImg(r, sym, 14, 0.85); r.addSpacer(6); txt(r, text, 13, { bold: true, min: 0.6 }); R.addSpacer(5); };
+  line("wind", `${Math.round(gust)} km/u`);
+  line("drop.fill", `${nl(rain)} mm`);
+  line("thermometer.medium", `${hi}° / ${lo}°`);
+  w.addSpacer();
+  // onderaan: 6 tijden, om de 2 uur
+  const row = w.addStack();
+  const idx = [0, 2, 4, 6, 8, 10].filter(i => i < f.time.length);
+  idx.forEach((i, k) => {
+    const col = row.addStack(); col.layoutVertically(); col.size = new Size(40, 0);
+    const tt = col.addStack(); tt.addSpacer(); txt(tt, (i === 0 ? "Nu" : String(+f.time[i].slice(11, 13)) + "u"), 12, { color: soft(0.8), min: 0.7 }); tt.addSpacer();
+    col.addSpacer(3);
+    const ic = col.addStack(); ic.addSpacer(); sfImg(ic, SYMBOL(f.weather_code[i]), 18); ic.addSpacer();
+    col.addSpacer(2);
+    const tp = col.addStack(); tp.addSpacer(); txt(tp, `${Math.round(f.temperature_2m[i])}°`, 12, { bold: true, min: 0.7 }); tp.addSpacer();
+    if (k < idx.length - 1) row.addSpacer();
+  });
+  w.refreshAfterDate = new Date(Date.now() + 15*60*1000);
+}
+
 async function build() {
   const fam = config.widgetFamily || "medium";
   const loc = await where();
@@ -169,6 +217,8 @@ async function build() {
   grad.colors = cols.map(x => new Color(x));
   grad.locations = cols.length === 3 ? [0, 0.55, 1] : [0, 1];
   w.backgroundGradient = grad;
+
+  if (fam === "medium") { medium(w, d, f, c, day, sig, loc); return w; }
 
   // Plaats + icoon
   const top = w.addStack(); top.centerAlignContent();
