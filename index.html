@@ -933,6 +933,12 @@ const alb=document.getElementById('alerts');if(alb){new ResizeObserver(joinSky).
 new MutationObserver(joinSky).observe(document.querySelector('main .grid'),{childList:true});
 joinSky();
 }</script>
+<script>{
+/* ---------- links vanuit de widget: #now, #uur, #buien, #kaart ---------- */
+const R={now:'.card.now',uur:'.card.chart',buien:'.card.radar',kaart:'.card.dmap'};
+const go=()=>{const k=(location.hash||'').slice(1),sel=R[k];if(!sel)return;const el=document.querySelector(sel);if(el)setTimeout(()=>el.scrollIntoView({behavior:'smooth',block:'start'}),400)};
+addEventListener('hashchange',go);addEventListener('load',go);
+}</script>
 <script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
 </body>
 </html>
