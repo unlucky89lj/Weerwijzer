@@ -212,6 +212,16 @@ header.warnsky #sky{box-shadow:inset 0 0 0 3px rgba(255,90,40,.85),inset 0 0 70p
 body.calm #sky i,body.calm .sky2 i{animation-play-state:paused!important}
 body.calm .k-drop,body.calm .k-flake,body.calm .k-flash{display:none}
 #calm[aria-pressed=true]{background:#e8f6f8;color:#0b2128}
+
+/* extra regels in Nu in */
+.yday{font-size:13px;opacity:.8;margin-top:2px}
+.xtra{display:grid;gap:6px;margin:10px 0}
+.xr{display:flex;gap:10px;align-items:flex-start;font-size:14.5px;line-height:1.35}
+.xi{flex:none;width:22px;height:22px;opacity:.85}.xi svg{width:22px;height:22px}
+.bs{display:inline-block;padding:0 7px;border-radius:9px;font-weight:800}
+.bs.good{background:#2f9e6b;color:#fff}.bs.ok{background:#f2c94c;color:#1a1300}.bs.bad{background:#e5533d;color:#fff}
+#notif[aria-pressed=true]{background:#e8f6f8;color:#0b2128}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:4000;max-width:min(92vw,420px);background:#0b2128;color:#fff;padding:12px 16px;border-radius:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);font-size:15px}
 </style>
 </head>
 <body>
@@ -223,6 +233,7 @@ body.calm .k-drop,body.calm .k-flake,body.calm .k-flash{display:none}
     <button id="fav" type="button">Bewaar plek</button>
     <button id="snd" type="button" aria-pressed="false">Geluid uit</button>
     <button id="calm" type="button" aria-pressed="false">Rustig</button>
+    <button id="notif" type="button" aria-pressed="false">Meldingen</button>
     <div id="qres" class="qres" hidden></div>
   </div>
   <div class="ctrl">
@@ -438,9 +449,54 @@ function zoomEarth(lat,lon){
     satMap._mk=L.circleMarker([lat,lon],{radius:6,color:'#fff',weight:2,fillColor:'#ff6a2b',fillOpacity:1}).addTo(satMap);
   }else{satMap.setView([lat,lon],satMap.getZoom());satMap._mk.setLatLng([lat,lon])}
 }
+
+/* ---------- extra's in "Nu in": regen-aftelklok, kleding, fietsweer, gisteren, zon en maan ---------- */
+const hm=t=>t.slice(11,16);
+function rainLine(c,h,m){
+  const p=m&&m.precipitation||[],t=m&&m.time||[],now=Date.now(),wet=v=>v>=0.1;
+  const mins=i=>Math.max(0,Math.round((new Date(t[i]).getTime()-now)/6e4));
+  if(p.length){
+    if(wet(c.precipitation)||wet(p[0])){const j=p.findIndex(v=>!wet(v));return j<0?'Regen houdt nog minstens 3 uur aan':j===0?'Regen stopt zo':'Droog over '+Math.max(15,mins(j))+' minuten'}
+    const i=p.findIndex(wet);if(i>=0)return 'Over '+Math.max(5,mins(i))+' minuten regen'+(p[i]>=1?' (fors)':'');
+  }
+  const k=h.precipitation.findIndex(v=>wet(v));return k<0?'Komende 24 uur droog':'Droog tot '+hm(h.time[k]);
+}
+function clothes(f,wind,rainSoon){
+  const a=f<=-5?'Dikke winterjas, muts, sjaal en handschoenen':f<=2?'Dikke jas en handschoenen':f<=8?'Warme jas':f<=14?'Jas of dikke trui':f<=20?'Trui of dun jasje':f<=26?'T-shirt':'Luchtige kleding, drink genoeg';
+  return a+(rainSoon?', paraplu of regenjas mee':'')+(wind>=50?', let op harde windstoten':'');
+}
+function bikeScore(f,rain,gust){let s=10-Math.min(6,rain*4)-Math.max(0,(gust-20)/8)-(f<5?(5-f)/3:0)-(f>28?(f-28)/2:0);return Math.max(1,Math.min(10,Math.round(s)))}
+function moon(dt){const syn=29.530588853,ref=Date.UTC(2000,0,6,18,14),age=(((dt-ref)/864e5)%syn+syn)%syn,fr=(1-Math.cos(2*Math.PI*age/syn))/2;
+  const n=age<1.85?'Nieuwe maan':age<5.54?'Wassende sikkel':age<9.23?'Eerste kwartier':age<12.92?'Wassende maan':age<16.61?'Volle maan':age<20.30?'Afnemende maan':age<23.99?'Laatste kwartier':age<27.68?'Afnemende sikkel':'Nieuwe maan';
+  return{n,pct:Math.round(fr*100),age}}
+async function extras(c,h,m){
+  const x=$('xtra');if(!x)return;
+  const rainSoon=h.precipitation.slice(0,4).some(v=>v>=0.2)||(m&&m.precipitation||[]).some(v=>v>=0.1);
+  const sc=h.time.map((t,i)=>({t,s:bikeScore(h.apparent_temperature[i],h.precipitation[i],h.wind_gusts_10m[i])})).slice(0,12);
+  const nowS=bikeScore(c.apparent_temperature,c.precipitation,c.wind_gusts_10m);
+  const day=sc.filter(o=>{const hh=+o.t.slice(11,13);return hh>=7&&hh<=21});const best=(day.length?day:sc).reduce((a,b)=>b.s>a.s?b:a,sc[0]);
+  const mo=moon(Date.now());
+  const row=(ic,txt,cls='')=>`<div class="xr ${cls}"><span class="xi" aria-hidden="true">${ic}</span><span>${txt}</span></div>`;
+  const I={rain:'<svg viewBox="0 0 24 24"><path d="M7 14a5 5 0 1 1 1-9.9A6 6 0 0 1 19 8a4 4 0 0 1-1 7.9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9 18l-1 3M13 18l-1 3M17 18l-1 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    cl:'<svg viewBox="0 0 24 24"><path d="M8 3 4 6l2 4 2-1v12h8V9l2 1 2-4-4-3c-1 2-2.5 3-4 3S9 5 8 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>',
+    bike:'<svg viewBox="0 0 24 24"><circle cx="6" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M6 16l4-8h5l3 8M10 8l2 8h-6M14 5h3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sun:'<svg viewBox="0 0 24 24"><path d="M3 18h18M7 18a5 5 0 0 1 10 0M12 7V4M5.6 10.6 3.5 8.5M18.4 10.6l2.1-2.1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'};
+  const sCls=nowS>=8?'good':nowS>=5?'ok':'bad';
+  x.innerHTML=row(I.rain,rainLine(c,h,m))+row(I.cl,clothes(c.apparent_temperature,c.wind_gusts_10m,rainSoon))+
+    row(I.bike,`Fietsweer nu <b class="bs ${sCls}">${nowS}/10</b>`+(best&&best.s>nowS?` · beste moment ${hm(best.t)} (${best.s}/10)`:''))+
+    `<div class="xr" id="sunmoon">${'<span class="xi" aria-hidden="true">'+I.sun+'</span>'}<span>Zon en maan laden…</span></div>`;
+  try{const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&hourly=temperature_2m&daily=sunrise,sunset,daylight_duration&past_days=1&forecast_days=1&timezone=auto`);
+    const d=await r.json(),dl=d.daily,ht=d.hourly;
+    // gisteren op hetzelfde uur
+    const nowH=c.time?c.time.slice(0,13):'',idx=ht.time.findIndex(t=>t.slice(0,13)===nowH);
+    if(idx>=24){const diff=Math.round(c.temperature_2m-ht.temperature_2m[idx-24]);$('yday')&&($('yday').textContent=diff===0?'Even warm als gisteren':Math.abs(diff)+'° '+(diff<0?'kouder':'warmer')+' dan gisteren')}
+    const dur=dl.daylight_duration[1],hh=Math.floor(dur/3600),mm=Math.round(dur%3600/60);
+    $('sunmoon').innerHTML=`<span class="xi" aria-hidden="true">${I.sun}</span><span>Zon op ${hm(dl.sunrise[1])} · onder ${hm(dl.sunset[1])} · ${hh} u ${mm} m daglicht<br>${mo.n}, ${mo.pct}% verlicht</span>`;
+  }catch(e){$('sunmoon').innerHTML=`<span class="xi" aria-hidden="true">${I.sun}</span><span>${mo.n}, ${mo.pct}% verlicht</span>`}
+}
 async function weather(){
   try{
-    const u=`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,snowfall,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover,is_day&hourly=temperature_2m,apparent_temperature,precipitation,snowfall,weather_code,wind_gusts_10m&forecast_hours=24&timezone=auto&wind_speed_unit=kmh`;
+    const u=`https://api.open-meteo.com/v1/forecast?latitude=${st.lat}&longitude=${st.lon}&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,snowfall,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m,cloud_cover,is_day&hourly=temperature_2m,apparent_temperature,precipitation,snowfall,weather_code,wind_gusts_10m&forecast_hours=24&minutely_15=precipitation&forecast_minutely_15=12&timezone=auto&wind_speed_unit=kmh`;
     const r=await fetch(u);if(!r.ok)throw 0;const d=await r.json(),c=d.current,h=d.hourly;try{sky(c)}catch(e){}
     const minT=Math.min(...h.temperature_2m),wetH=h.precipitation.some((p,i)=>p>0&&h.temperature_2m[i]<=1),ijzel=h.weather_code.some(x=>[56,57,66,67].includes(x));
     const snow=h.snowfall.reduce((a,b)=>a+b,0);
@@ -449,7 +505,7 @@ async function weather(){
     else if(snow>0||wetH)w=['hi','Kans op gladheid','Neerslag bij temperatuur rond of onder nul.'];
     else if(minT<=1&&c.relative_humidity_2m>85)w=['mid','Kans op rijp en plaatselijke gladheid','Vochtig en het koelt af tot '+nl(minT)+' °C.'];
     else if(minT<=3)w=['mid','Let op: het koelt af tot '+nl(minT)+' °C',''];
-    $('now').innerHTML=`<div class="big"><div class="temp">${nl(c.temperature_2m)}°</div><div><div class="desc">${wmo(c.weather_code)}</div><div class="feel">Voelt als ${nl(c.apparent_temperature)}°</div></div></div>
+    $('now').innerHTML=`<div class="big"><div class="temp">${nl(c.temperature_2m)}°</div><div><div class="desc">${wmo(c.weather_code)}</div><div class="feel">Voelt als ${nl(c.apparent_temperature)}°</div><div class="yday" id="yday"></div></div></div>
     <div class="stats">
       <div class="stat"><b>${Math.round(c.wind_speed_10m)} km/u</b><span>Wind ${dir(c.wind_direction_10m)}, ${bft(c.wind_speed_10m)} Bft</span></div>
       <div class="stat"><b>${Math.round(c.wind_gusts_10m)} km/u</b><span>Windstoten</span></div>
@@ -458,7 +514,9 @@ async function weather(){
       <div class="stat"><b>${c.relative_humidity_2m}%</b><span>Luchtvochtigheid</span></div>
       <div class="stat"><b>${c.cloud_cover}%</b><span>Bewolking</span></div>
     </div>
+    <div class="xtra" id="xtra"></div>
     <div class="warn ${w[0]}">${w[1]}<small>${w[2]} Eigen inschatting, geen KNMI-waarschuwing.</small></div>`;
+    try{extras(c,h,d.minutely_15)}catch(e){}
     chart(h);
     const al=[],gmax=Math.max(c.wind_gusts_10m,...h.wind_gusts_10m),pmax=Math.max(...h.precipitation);
     if(w[0]==='hi')al.push(w[1]+' in '+st.n);
@@ -675,7 +733,10 @@ function setAlerts(src,list){AL[src]=list;const all=Object.values(AL).flat(),el=
   if(!all.length){el.hidden=true;el.innerHTML='';return}
   el.hidden=false;el.innerHTML='<div class="wrap">'+all.map((a,i)=>`<button type="button" class="al" data-i="${i}">${esc(a.t||a)}<span class="alg">Toon op kaart</span></button>`).join('')+'</div>';
   el.querySelectorAll('.al').forEach(b=>b.addEventListener('click',()=>showAlert(all[+b.dataset.i])));
-  const keys=all.map(a=>a.t||a),nw=keys.filter(a=>!seen.has(a));keys.forEach(a=>seen.add(a));if(nw.length&&st.snd)beep()}
+  const keys=all.map(a=>a.t||a),nw=keys.filter(a=>!seen.has(a));keys.forEach(a=>seen.add(a));if(nw.length&&st.snd)beep();if(nw.length)notify(nw)}
+function notify(list){try{if(!('Notification' in window)||Notification.permission!=='granted')return;let sent={};try{sent=JSON.parse(localStorage.getItem('wa-sent')||'{}')}catch(e){}
+  const fresh=list.filter(t=>!sent[t]||Date.now()-sent[t]>12*36e5);if(!fresh.length)return;fresh.forEach(t=>sent[t]=Date.now());try{localStorage.setItem('wa-sent',JSON.stringify(sent))}catch(e){}
+  navigator.serviceWorker.ready.then(r=>fresh.slice(0,3).forEach(t=>r.showNotification('Weer & Alarm',{body:t,icon:'icon-192.png',badge:'icon-192.png',tag:t})))}catch(e){}}
 function showAlert(a){
   if(!a||a.lat==null){document.querySelector('.card.now')?.scrollIntoView({behavior:'smooth',block:'start'});return}
   const card=document.querySelector('.card.dmap');if(card)card.scrollIntoView({behavior:'smooth',block:'center'});
@@ -685,6 +746,10 @@ function showAlert(a){
       if(best&&bd<1&&best.openPopup)best.openPopup()})},450);
 }
 function beep(){try{AC=AC||new AudioContext();const t=AC.currentTime;[0,.35].forEach((d,i)=>{const o=AC.createOscillator(),g=AC.createGain();o.frequency.value=i?660:880;g.gain.setValueAtTime(.12,t+d);g.gain.exponentialRampToValueAtTime(.001,t+d+.3);o.connect(g).connect(AC.destination);o.start(t+d);o.stop(t+d+.3)})}catch(e){}}
+(()=>{const b=$('notif');const upd=()=>{const on='Notification' in window&&Notification.permission==='granted';b.setAttribute('aria-pressed',on);b.textContent=on?'Meldingen aan':'Meldingen'};
+  upd();b.addEventListener('click',async()=>{if(!('Notification' in window)){alertBox('Meldingen werken alleen als de app op je beginscherm staat. Zet hem eerst via Deel → Zet op beginscherm.');return}
+    const r=await Notification.requestPermission();upd();if(r==='granted')navigator.serviceWorker.ready.then(x=>x.showNotification('Weer & Alarm',{body:'Meldingen staan aan. Je krijgt een bericht bij nieuwe waarschuwingen.',icon:'icon-192.png'}))})})();
+function alertBox(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),6000)}
 (()=>{const b=$('calm');let on=false;try{on=localStorage.getItem('wa-calm')==='1'}catch(e){}
   const set=v=>{on=v;document.body.classList.toggle('calm',on);b.setAttribute('aria-pressed',on);b.textContent=on?'Rustig aan':'Rustig';try{localStorage.setItem('wa-calm',on?'1':'0')}catch(e){}};
   set(on);b.addEventListener('click',()=>set(!on))})();

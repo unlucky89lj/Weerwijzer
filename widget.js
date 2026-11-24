@@ -93,7 +93,8 @@ async function build() {
     return w;
   }
   const c = d.current, h = d.hourly, day = c.is_day !== 0;
-  const g = GRAD[day ? kindOf(c.weather_code) : "night"];
+  const sigs = signals(d);
+  const g = sigs.length ? ["#ff6a2b", "#c2410c"] : GRAD[day ? kindOf(c.weather_code) : "night"];
   const grad = new LinearGradient();
   grad.colors = [new Color(g[0]), new Color(g[1])];
   grad.locations = [0, 1];
@@ -122,12 +123,12 @@ async function build() {
   }
 
   // Signalen
-  const sig = signals(d);
+  const sig = sigs;
   w.addSpacer(6);
   if (sig.length) {
     const s = w.addStack();
-    s.backgroundColor = new Color("#ff6a2b"); s.cornerRadius = 8; s.setPadding(3, 8, 3, 8);
-    txt(s, "⚠︎ " + sig.slice(0, fam === "small" ? 1 : 2).join(" · "), 11, { bold: true, color: new Color("#1a0a02"), min: 0.6 });
+    s.backgroundColor = new Color("#1a0a02", 0.85); s.cornerRadius = 8; s.setPadding(3, 8, 3, 8);
+    txt(s, "⚠︎ " + sig.slice(0, fam === "small" ? 1 : 2).join(" · "), 11, { bold: true, color: Color.white(), min: 0.6 });
   } else {
     const rainH = h.precipitation_probability.findIndex(p => p >= 50);
     txt(w, rainH < 0 ? "Komende 12 uur droog" : rainH === 0 ? "Nu kans op regen" : `Regen over ± ${rainH} uur`, 11, { bold: true, min: 0.7 });
